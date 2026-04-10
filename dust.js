@@ -15,13 +15,13 @@ const DustSystem = {
     CONFIG: {
         MASK_SIZE: 512,
         DUST_FADE_RATE: 0.0008,
-        MIN_BRUSH_RADIUS: 0.08,
-        MAX_BRUSH_RADIUS: 0.18,
-        WRIST_MULTIPLIER: 2.5,
+        MIN_BRUSH_RADIUS: 0.04, // Reducido para que cueste más limpiar
+        MAX_BRUSH_RADIUS: 0.09, // Reducido para que cueste más limpiar
+        WRIST_MULTIPLIER: 1.5, // Menor área alrededor de la muñeca
         VISIBILITY_THRESHOLD: 0.5,
         FIRST_CONTACT_FRAMES: 3,
         TRAIL_STEPS: 6,
-        CLEAN_THRESHOLD: 0.70 // 70% para considerar limpio
+        CLEAN_THRESHOLD: 0.75 // 75% para considerar limpio y demorar más el salto
     },
     
     // Estado

@@ -450,19 +450,42 @@ async function initMediaPipe() {
 
     State.pose.onResults(onPoseResults);
 
-    // Inicializar cámara
+    // Inicializar cámara - Mejorado para evitar el gran angular (0.5x / Ultra Wide) en iPad
     try {
-        State.camera = new Camera(State.videoElement, {
-            onFrame: async () => {
-                // Siempre enviar frames: fase 1/2 para detectar cuerpo, fase 3 para gestos
-                await State.pose.send({ image: State.videoElement });
-            },
-            width: CONFIG.videoWidth,
-            height: CONFIG.videoHeight
+        // En vez de usar new Camera(..) genérico que puede tomar la cámara equivocada (ej: lente ancho),
+        // pedimos la cámara frontal (o principal) normal con getUserMedia indicando el 'zoom' (opcional) 
+        // para que iOS prefiera la lente estándar.
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+                facingMode: 'user', 
+                width: { ideal: CONFIG.videoWidth },
+                height: { ideal: CONFIG.videoHeight },
+                zoom: 1 // Truco para evitar el lente Ultra Wide en iOS
+            }
         });
 
-        await State.camera.start();
-        console.log('✅ Cámara iniciada');
+        State.videoElement.srcObject = stream;
+        
+        // Loop de envío de frames a MediaPipe
+        const procesarFrame = async () => {
+            if (State.videoElement.videoWidth > 0 && !State.videoElement.paused) {
+                await State.pose.send({ image: State.videoElement });
+            }
+            // Usa el callback óptimo si está disponible, sino requestAnimationFrame
+            if ('requestVideoFrameCallback' in State.videoElement) {
+                State.videoElement.requestVideoFrameCallback(procesarFrame);
+            } else {
+                requestAnimationFrame(procesarFrame);
+            }
+        };
+
+        State.videoElement.onloadedmetadata = () => {
+            State.videoElement.play();
+            procesarFrame();
+        };
+        
+        console.log('✅ Cámara iniciada con lente normal (forzada sin gran angular)');
 
         // Cargar BodyPix para segmentación (gratis, corre en el navegador)
         await cargarBodyPix();
@@ -473,14 +496,14 @@ async function initMediaPipe() {
         // Iniciar música de fondo suavemente
         const bgMusic = $('#bg-music');
         if (bgMusic) {
-            bgMusic.volume = 0.05;
+            bgMusic.volume = 0.015; // Volumen reducido para que no sea muy invasiva
             bgMusic.play().catch(e => console.log('Autoplay bloqueado. La música iniciará al toque de pantalla.'));
             
             // Por si el navegador bloqueó el autoplay, iniciar al primer click
             document.body.addEventListener('click', () => {
                 unlockAudios();
                 if (bgMusic.paused) {
-                    bgMusic.volume = 0.05;
+                    bgMusic.volume = 0.015;
                     bgMusic.play();
                 }
             }, { once: true });
@@ -492,6 +515,13 @@ async function initMediaPipe() {
                 console.log("¡Polvo limpiado!");
                 hideElement('#instrucciones-polvo');
                 State.faseActual = 'espejo'; // Avanza a la fase normal
+
+                // Detener audio-inicio si sigue sonando para que no choque con mueve.wav
+                const audioInicio = document.getElementById('audio-inicio');
+                if (audioInicio) {
+                    audioInicio.pause();
+                    audioInicio.currentTime = 0;
+                }
 
                 // Audio Mueve
                 const audioMueve = document.getElementById('audio-mueve');
@@ -1377,11 +1407,19 @@ function resetearExperiencia() {
 
     // Volver a fase limpiar si el sistema de polvo está disponible
     if (typeof DustSystem !== 'undefined') {
-        State.faseActual = 'limpiar';
+        cambiarFase('espejo');
+        State.faseActual = 'limpiar'; // Fuerza la lógica a 'limpiar'
         DustSystem.resetDust();
         showElement('#instrucciones-polvo');
     } else {
         cambiarFase('espejo');
+    }
+
+    // Limpiar el canvas del traje para evitar que la imagen se trabe
+    const trajeCanvas = $('#traje-canvas');
+    if (trajeCanvas) {
+        const ctxCanvasTraje = trajeCanvas.getContext('2d');
+        ctxCanvasTraje.clearRect(0, 0, trajeCanvas.width, trajeCanvas.height);
     }
 
     // Ocultar elementos de UI
