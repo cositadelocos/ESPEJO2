@@ -450,20 +450,61 @@ async function initMediaPipe() {
 
     State.pose.onResults(onPoseResults);
 
-    // Inicializar cámara - Mejorado para evitar el gran angular (0.5x / Ultra Wide) en iPad
+    // Inicializar cámara - Búsqueda estricta de hardware para evitar el Gran Angular en iPad
     try {
-        // En vez de usar new Camera(..) genérico que puede tomar la cámara equivocada (ej: lente ancho),
-        // pedimos la cámara frontal (o principal) normal con getUserMedia indicando el 'zoom' (opcional) 
-        // para que iOS prefiera la lente estándar.
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-                facingMode: 'user', 
-                width: { ideal: CONFIG.videoWidth },
-                height: { ideal: CONFIG.videoHeight },
-                zoom: 1 // Truco para evitar el lente Ultra Wide en iOS
+        let stream;
+        
+        // 1. Pedir cámara general primero para obtener permisos y poder leer los nombres reales
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        
+        // 2. Listar y filtrar todas las cámaras disponibles
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoCameras = devices.filter(d => d.kind === 'videoinput');
+        
+        let idCamaraNormal = null;
+        console.log("Cámaras detectadas: ", videoCameras.map(d => d.label));
+
+        // 3. Buscar una cámara frontal que sea la normal y descartar "Ultra Wide", "Desk View" o parecidas
+        for (const cam of videoCameras) {
+            const nom = cam.label.toLowerCase();
+            // Buscar explícitamente "front" (frontal) pero rechazar las gran angulares
+            if (nom.includes('front') && !nom.includes('ultra') && !nom.includes('wide') && !nom.includes('desk')) {
+                idCamaraNormal = cam.deviceId;
+                break;
             }
-        });
+        }
+        
+        // Si no hay "front" segura, usar la primera que no diga ultra wide ni back
+        if (!idCamaraNormal) {
+            const segura = videoCameras.find(c => !c.label.toLowerCase().includes('ultra') && !c.label.toLowerCase().includes('wide') && !c.label.toLowerCase().includes('back'));
+            if (segura) idCamaraNormal = segura.deviceId;
+        }
+
+        // Apagar el stream de prueba
+        stream.getTracks().forEach(t => t.stop());
+
+        // 4. Iniciar la cámara correcta
+        if (idCamaraNormal) {
+            console.log("Forzando el uso de la cámara: ID ", idCamaraNormal);
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    deviceId: { exact: idCamaraNormal },
+                    width: { ideal: CONFIG.videoWidth },
+                    height: { ideal: CONFIG.videoHeight }
+                }
+            });
+        } else {
+            console.log("No se pudo distinguir la cámara, usando facingMode: user");
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: 'user', 
+                    width: { ideal: CONFIG.videoWidth },
+                    height: { ideal: CONFIG.videoHeight }
+                }
+            });
+        }
 
         State.videoElement.srcObject = stream;
         
@@ -485,7 +526,7 @@ async function initMediaPipe() {
             procesarFrame();
         };
         
-        console.log('✅ Cámara iniciada con lente normal (forzada sin gran angular)');
+        console.log('✅ Cámara iniciada con forzado de hardware.');
 
         // Cargar BodyPix para segmentación (gratis, corre en el navegador)
         await cargarBodyPix();
