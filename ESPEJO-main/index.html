@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>El Hilo que Nos Conecta - Museo de Trajes de Bogotá</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- MediaPipe Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <!-- Face API.js for face detection -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <!-- TensorFlow.js + BodyPix -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- PixiJS para la fase de limpieza -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+</head>
+<body>
+    <!-- Botón Pantalla Completa (Global) -->
+    <button id="btn-fullscreen" class="btn-flotante-top-right">
+        ⛶ Pantalla Completa
+    </button>
+
+    <!-- FASE 1: El Espejo -->
+    <div id="fase-espejo" class="fase active">
+        <div class="camera-container">
+            <video id="input-video" autoplay playsinline muted></video>
+            <canvas id="output-canvas"></canvas>
+
+            <!-- PixiJS Capa de Polvo (Fase 0) -->
+            <div id="pixi-container" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 5; pointer-events: none;"></div>
+
+            <!-- Instrucciones de Polvo -->
+            <div id="instrucciones-polvo" class="hidden" style="position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); z-index: 10; font-family: var(--fuente-cuerpo); font-size: 1.5rem; color: #fff; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); text-align: center; opacity: 0.8;">
+                Mueve tus manos para despejar el espejo
+            </div>
+
+            <!-- Overlay de textos flotantes -->
+            <div id="textos-flotantes" class="hidden">
+                <div class="texto-flotante" id="texto-1">¿Te atreves a viajar en el tiempo?</div>
+                <div class="texto-flotante" id="texto-2">Colombia te viste de siglos</div>
+                <div class="texto-flotante" id="texto-3">Toca una tela y descubre tu historia</div>
+            </div>
+
+            <!-- Indicador de detección -->
+            <div id="detection-status" class="detection-status">
+                <span class="pulse"></span>
+                <span id="status-text">Buscando persona...</span>
+            </div>
+        </div>
+
+        <!-- Botones de telas (FASE 1) -->
+        <!-- Tarjetas de Categorías (FASE 1 - Nivel 1) -->
+        <div id="tarjetas-categorias" class="tarjetas-categorias hidden">
+            <button class="tarjeta-cat interactable" data-target-cat="Hispanico">
+                <div class="tarjeta-bg" style="background: linear-gradient(135deg, #a61c1c 0%, #1a1a1a 100%);"></div>
+                <div class="tarjeta-titulo">HISPÁNICO</div>
+            </button>
+            <button class="tarjeta-cat interactable" data-target-cat="Mestizaje">
+                <div class="tarjeta-bg" style="background: linear-gradient(135deg, #e3d2a4 0%, #c1a070 100%);"></div>
+                <div class="tarjeta-titulo">MESTIZAJE</div>
+            </button>
+            <button class="tarjeta-cat interactable" data-target-cat="Indigena">
+                <div class="tarjeta-bg" style="background: linear-gradient(135deg, #3ba846 0%, #111 100%);"></div>
+                <div class="tarjeta-titulo">INDÍGENA</div>
+            </button>
+            <button class="tarjeta-cat interactable" data-target-cat="Afro">
+                <div class="tarjeta-bg" style="background: linear-gradient(135deg, #ff0f7b 0%, #ff5e00 100%);"></div>
+                <div class="tarjeta-titulo">AFRO</div>
+            </button>
+        </div>
+
+        <!-- Botones de telas (FASE 1 - Nivel 2) -->
+        <div id="botones-telas" class="botones-telas hidden">
+            <!-- Hispanico -->
+            <button class="btn-tela interactable" data-cat="Hispanico" data-traje="frac" title="Frac">
+                <div class="tela-preview" style="background-image: url('Hispanico/frak.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Hispanico" data-traje="francisca" title="Francisca">
+                <div class="tela-preview" style="background-image: url('Hispanico/francisca.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Hispanico" data-traje="manuelita" title="Manuelita Sáenz">
+                <div class="tela-preview" style="background-image: url('Hispanico/Manuelita.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <!-- Indigena -->
+            <button class="btn-tela interactable" data-cat="Indigena" data-traje="kamentza" title="Kamëntsá">
+                <div class="tela-preview" style="background-image: url('Indigena/kamentza.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Indigena" data-traje="shipibo" title="Shipibo">
+                <div class="tela-preview" style="background-image: url('Indigena/shipibo.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Indigena" data-traje="wayu" title="Wayuu">
+                <div class="tela-preview" style="background-image: url('Indigena/wayu.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <!-- Mestizaje -->
+            <button class="btn-tela interactable" data-cat="Mestizaje" data-traje="campesino" title="Campesino Boyacá">
+                <div class="tela-preview" style="background-image: url('Mestizaje/Campesino.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Mestizaje" data-traje="mapale" title="Mapalé">
+                <div class="tela-preview" style="background-image: url('Mestizaje/mapale.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Mestizaje" data-traje="silletero" title="Silletero Antioqueño">
+                <div class="tela-preview" style="background-image: url('Mestizaje/silletero.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <!-- Afro -->
+            <button class="btn-tela interactable" data-cat="Afro" data-traje="bullerengue" title="Bullerengue">
+                <div class="tela-preview" style="background-image: url('Afro/bullerengue.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Afro" data-traje="lia" title="Lia (Afrocolombiana)">
+                <div class="tela-preview" style="background-image: url('Afro/lia.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+            <button class="btn-tela interactable" data-cat="Afro" data-traje="recipiente" title="Vendedora Palenquera">
+                <div class="tela-preview" style="background-image: url('Afro/recipiente.png'); background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(255,255,255,0.1);"></div>
+            </button>
+
+            <!-- Boton para Regresar de Trajes a Categoria -->
+            <button id="btn-volver-categorias" class="btn-tela interactable empty-return" title="Volver a Categorías">
+                <div class="tela-preview" style="background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: #fff; font-weight: bold;">
+                    ↩
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- FASE 2: Preparación y Cuenta Regresiva -->
+    <div id="fase-preparacion" class="fase">
+        <div class="camera-container">
+            <video id="prep-video" autoplay playsinline muted></video>
+            <canvas id="prep-canvas"></canvas>
+
+            <!-- Anuncios de preparación -->
+            <div id="anuncios-prep" class="anuncios-prep">
+                <div class="anuncio active">¡Prepárate para ponerte un traje histórico!</div>
+                <div class="anuncio">Ubícate en el tapete rojo — necesitamos verte de cuerpo completo</div>
+                <div class="anuncio">Pies, manos, cabeza... ¡todo cuenta!</div>
+            </div>
+
+            <!-- Contador -->
+            <div id="contador-container" class="contador-container hidden">
+                <div id="contador">3</div>
+                <div class="contador-texto">Mira a la cámara</div>
+            </div>
+
+            <!-- Guía de cuerpo completo (Máscara Oscura) -->
+            <div id="guia-cuerpo" class="guia-cuerpo">
+                <svg class="fullscreen-mask" width="100%" height="100%" viewBox="0 0 1000 2000" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                        <mask id="hole-mask">
+                            <rect width="100%" height="100%" fill="white"/>
+                            <!-- Forma humana escalada y centrada (x5) -->
+                            <g transform="translate(250, 500) scale(5)">
+                                <circle cx="50" cy="35" r="18" fill="black"/>
+                                <path d="M 15 100 Q 15 65 50 65 Q 85 65 85 100 L 85 200 L 15 200 Z" fill="black"/>
+                            </g>
+                        </mask>
+                    </defs>
+                    <!-- Fondo oscurecido con la forma humana "recortada" -->
+                    <rect width="100%" height="100%" fill="rgba(10, 5, 5, 0.85)" mask="url(#hole-mask)"/>
+                    <g transform="translate(250, 500) scale(5)">
+                        <!-- Línea punteada dorada bordeando el área iluminada -->
+                        <circle cx="50" cy="35" r="18" fill="none" stroke="rgba(212, 165, 116, 0.9)" stroke-width="1.5" stroke-dasharray="3,3"/>
+                        <path d="M 15 100 Q 15 65 50 65 Q 85 65 85 100 L 85 200 L 15 200 Z" fill="none" stroke="rgba(212, 165, 116, 0.9)" stroke-width="1.5" stroke-dasharray="3,3"/>
+                    </g>
+                </svg>
+                <div class="instruccion-cuerpo">Alinea tu cuerpo en el área iluminada</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 3: Visualización del Traje -->
+    <div id="fase-traje" class="fase">
+        <div class="camera-container">
+            <!-- Canvas para el fotomontaje -->
+            <canvas id="traje-canvas"></canvas>
+
+            <!-- Textos flotantes y UI de Curiosidades -->
+            <div id="ui-curiosidades" class="ui-curiosidades hidden">
+                <div class="curiosidades-header">Acerca tu mano a estos para descubrir más</div>
+                <div class="capsulas-container">
+                    <button class="btn-capsula interactable" id="btn-dato-1">☁️ Curiosidad 1</button>
+                    <button class="btn-capsula interactable" id="btn-dato-2">☁️ Curiosidad 2</button>
+                </div>
+            </div>
+
+            <!-- Panel Modal de Curiosidad Extendida -->
+            <div id="panel-curiosidad" class="panel-curiosidad hidden">
+                <button class="btn-cerrar interactable" id="btn-cerrar-dato">✖ Volver</button>
+                <div class="panel-contenido" id="texto-curiosidad-expandido"></div>
+            </div>
+
+            <!-- Imagen del traje (oculta, usada para canvas) -->
+            <img id="img-traje" class="hidden" alt="Traje histórico">
+
+            <!-- Foto capturada (oculta, usada para canvas) -->
+            <img id="img-capturada" class="hidden" alt="Foto capturada">
+
+            <!-- Loading overlay -->
+            <div id="loading-ia" class="loading-ia hidden">
+                <div class="spinner"></div>
+                <div class="loading-text">Analizando tu silueta...</div>
+                <div class="loading-subtext">BodyPix IA - 100% gratuito</div>
+            </div>
+
+            <!-- Elementos removidos: datos-curiosos (ahora renderizan con canvas/fisicas en app.js) -->
+
+            <!-- Info del traje -->
+            <div id="info-traje" class="info-traje">
+                <h2 id="nombre-traje"></h2>
+                <div id="ubicacion-traje">
+                    <img src="assets/mapa-colombia.png" alt="Mapa de Colombia" id="mapa-colombia" class="hidden">
+                    <div class="pin-ubicacion"></div>
+                    <span id="region-traje"></span>
+                    <span id="anio-traje"></span>
+                </div>
+            </div>
+
+            <!-- Indicadores de gestos -->
+            <div id="gestos-hint" class="gestos-hint">
+                <div class="gesto">
+                    <span class="gesto-icon">👈</span>
+                    <span>Levanta el brazo<br>izquierdo</span>
+                </div>
+                <div class="gesto">
+                    <span class="gesto-icon">📸</span>
+                    <span>Sube ambos brazos<br>para tomar foto</span>
+                </div>
+                <div class="gesto">
+                    <span class="gesto-icon">👉</span>
+                    <span>Levanta el brazo<br>derecho</span>
+                </div>
+                <div class="gesto">
+                    <span class="gesto-icon">👋</span>
+                    <span>Agita tu mano<br>arriba para salir</span>
+                </div>
+            </div>
+
+            <!-- Contador de trajes -->
+            <div id="contador-trajes" class="contador-trajes">
+                <span id="traje-actual">1</span> / <span id="total-trajes">5</span>
+            </div>
+
+            <!-- Botón volver -->
+            <button id="btn-volver" class="btn-flotante interactable">
+            <span class="icon">↺</span> Terminar
+        </button>
+        </div>
+    </div>
+
+    <!-- Modal para foto/recuerdo -->
+    <div id="modal-foto" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="modal-title">¡Llévate este momento!</h3>
+            <canvas id="canvas-recuerdo"></canvas>
+            
+            <div id="qr-section">
+                <p id="qr-loading">⏳ Guardando tu recuerdo en la historia...</p>
+                <div id="qr-container" class="qr-decorated"></div>
+                <div id="qr-instructions" class="hidden">
+                    <p class="qr-text-main">Descarga tu recuerdo de</p>
+                    <p class="qr-text-highlight">"El Hilo que Nos Conecta"</p>
+                    <p class="qr-text-sub">Escanea este código con tu celular</p>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <div class="qr-info">
+                    <p class="qr-text">¡Gracias por visitarnos!</p>
+                    <p class="qr-text-sub">Museo de Trajes de Bogotá</p>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button id="btn-descargar" class="btn-accion interactable">Descargar Imagen</button>
+                    <button id="btn-cerrar-modal" class="btn-accion secundario interactable">Volver</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio feedback (opcional) -->
+    <audio id="audio-shutter" preload="auto">
+        <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" type="audio/wav">
+    </audio>
+
+    <!-- Nuevos Audios -->
+    <audio id="audio-inicio" src="AUDIOS/inicio.wav" preload="auto"></audio>
+    <audio id="audio-mueve" src="AUDIOS/mueve.wav" preload="auto"></audio>
+    <audio id="audio-navegacion" src="AUDIOS/navegacion.wav" preload="auto"></audio>
+    <audio id="audio-final" src="AUDIOS/final.wav" preload="auto"></audio>
+
+    <!-- Música de fondo -->
+    <audio id="bg-music" src="musica.mp3" loop preload="auto"></audio>
+
+    <!-- Overlay Global para dibujar manos en todo momento -->
+    <canvas id="overlay-canvas" class="mirrored"></canvas>
+
+    <script src="dust.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

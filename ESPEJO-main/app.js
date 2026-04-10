@@ -1,0 +1,1684 @@
+/**
+ * EL HILO QUE NOS CONECTA
+ * Museo de Trajes de Bogotá - Simulador de Espejo Interactivo
+ *
+ * Funcionalidades:
+ * - MediaPipe para detección de cuerpo y gestos
+ * - Face-api.js para detección de rostro
+ * - Fotomontaje con Canvas API
+ * - Navegación por gestos
+ * - Datos curiosos animados
+ */
+
+// ========================================
+// CONFIGURACIÓN Y ESTADO GLOBAL
+// ========================================
+
+const CONFIG = {
+    // URLs de modelos de MediaPipe
+    modelUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/',
+    holisticModelUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/holistic/',
+
+    // Configuración de cámara
+    videoWidth: 640,
+    videoHeight: 480,
+
+    // Umbrales para gestos
+    gestureThreshold: 0.3,      // Sensibilidad de gestos
+    detectionConfidence: 0.5,   // Confianza mínima de detección
+    personDetectionThreshold: 0.3,
+
+    // Timing
+    countdownDuration: 3000,    // 3 segundos para contador
+    textAnimationInterval: 4000,
+    dataCuriousInterval: 6000,
+
+    // Rutas de trajes
+    trajes: [
+        // Hispanico
+        {
+            id: 'frac',
+            nombre: 'Frac (Influencia Europea)',
+            archivo: 'Hispanico/frak.png',
+            region: 'Bogotá / Andes',
+            anio: '1850–1950',
+            datosCuriosos: [
+                'Símbolo de la más alta alcurnia y noches de etiqueta inolvidables.',
+                'Un reflejo de la elegancia victoriana, donde cada doblez ocultaba un secreto de la alta sociedad.'
+            ],
+            promptIA: `Atuendo masculino formal de etiqueta completa, estilo frac de influencia europea (mediados s. XIX - principios s. XX). Chaqueta de frac de lana negra de alta calidad con solapas de pico anchas, cuerpo frontal corto y colas traseras en picos simétricos. Chaleco de piqué de algodón blanco texturizado. Camisa blanca de algodón con cuello de pajarita rígido. Pantalón de vestir recto con raya diplomática fina en gris oscuro y negro. Corbatín de seda negra. Ajuste formal y elegante.`
+        },
+        {
+            id: 'francisca',
+            nombre: 'Francisca',
+            archivo: 'Hispanico/francisca.png',
+            region: 'Región Andina / Hispánico',
+            anio: 'Colonial / Siglo XIX',
+            datosCuriosos: [
+                'Un atuendo representativo de la época colonial y la influencia hispánica.',
+                'Sus finos detalles muestran la adaptación de las modas europeas a nuestro clima.'
+            ],
+            promptIA: `Retrato de mujer con traje colonial hispánico, mantilla, encajes, elegancia de época.`
+        },
+        {
+            id: 'manuelita',
+            nombre: 'Manuelita Sáenz',
+            archivo: 'Hispanico/Manuelita.png',
+            region: 'Región Andina',
+            anio: 'Siglo XIX (Independencia)',
+            datosCuriosos: [
+                'Inspirado en la rebeldía y elegancia de la Libertadora del Libertador.',
+                'Combina los cortes militares con la moda femenina de la época de independencia.'
+            ],
+            promptIA: `Traje de mujer del siglo XIX estilo independentista, cortes de influencia húsar o militar, telas ricas.`
+        },
+        // Indigena
+        {
+            id: 'kamentza',
+            nombre: 'Kamëntsá (Camsá)',
+            archivo: 'Indigena/kamentza.png',
+            region: 'Valle de Sibundoy (Putumayo)',
+            anio: 'Ancestral',
+            datosCuriosos: [
+                'Los coloridos collares en el cuello representan las semillas, el cosmos y la vida.',
+                'Sus tejidos están llenos de simbología y conexión espiritual con la tierra.'
+            ],
+            promptIA: `Traje tradicional indígena Camsá o Kamëntsa, fondo de lana oscura, collares gruesos de cuentas de colores vivos.`
+        },
+        {
+            id: 'shipibo',
+            nombre: 'Shipibo',
+            archivo: 'Indigena/shipibo.png',
+            region: 'Amazonía',
+            anio: 'Ancestral',
+            datosCuriosos: [
+                'Las formas geométricas (Kené) representan los caminos de los ríos y las visiones de la anaconda.',
+                'Los diseños son una partitura musical que las abuelas cantan mientras tejen.'
+            ],
+            promptIA: `Atuendo tradicional de la Amazonía, diseños geométricos kené sobre telas claras, teñidos de tierras naturales.`
+        },
+        {
+            id: 'wayu',
+            nombre: 'Wayuu',
+            archivo: 'Indigena/wayu.png',
+            region: 'La Guajira',
+            anio: 'Ancestral / Actual',
+            datosCuriosos: [
+                'La manta guajira vuela libremente al viento del desierto abrazando a la mujer.',
+                "Los tejidos son guiados por Wale'kerü, la araña mítica que enseñó a tejer a la comunidad."
+            ],
+            promptIA: `Mujer con manta tradicional Wayuu voluminosa, colores vibrantes del desierto, mochila tejida colorida.`
+        },
+        // Mestizaje
+        {
+            id: 'campesino',
+            nombre: 'Campesino de Boyacá',
+            archivo: 'Mestizaje/Campesino.png',
+            region: 'Boyacá / Andes',
+            anio: '1850–1950',
+            datosCuriosos: [
+                'Una prenda documentada desde 1850, testigo silencioso del trabajo duro en los campos.',
+                'Escudo cálido e inquebrantable contra las heladas madrugadas del páramo.'
+            ],
+            promptIA: `Atuendo masculino tradicional campesino de Boyacá, Andes colombianos. Ruana cuadrada grande de lana virgen color crudo/hueso con textura áspera, densa y pesada, flecos cortos en borde inferior, cuello en V con cordón. Camisa blanca de algodón bajo la ruana. Pantalón de vestir recto color chocolate oscuro en paño de lana mate. Sombrero de paja color ocre claro con cinta negra. Pañolón de lana blanca con puntos calados cubriendo cuello y mandíbula. Alpargatas de fique crudo. Aspecto rústico andino.`
+        },
+        {
+            id: 'mapale',
+            nombre: 'Mapalé',
+            archivo: 'Mestizaje/mapale.png',
+            region: 'Caribe',
+            anio: 'Tradicional',
+            datosCuriosos: [
+                'Su nombre proviene del pez mapalé, cuyos ágiles movimientos inspiraron la danza.',
+                'Representa la fuerza, el vigor y la enorme herencia rítmica de los palenques libres.'
+            ],
+            promptIA: `Traje de baile de Mapalé, colores vibrantes, volantes, flecos que denotan movimiento y energía tropical.`
+        },
+        {
+            id: 'silletero',
+            nombre: 'Silletero Antioqueño',
+            archivo: 'Mestizaje/silletero.png',
+            region: 'Antioquia',
+            anio: 'Siglo XX / Actual',
+            datosCuriosos: [
+                'Cargan a sus espaldas silletas de hasta 70 kg, llenas de flores y tradición.',
+                'El atuendo clásico: carriel cruzado, poncho al hombro, alpargatas y sombrero aguadeño.'
+            ],
+            promptIA: `Atuendo tradicional campesino silletero de Antioquia, carriel, sombrero de fibra pequeña, alpargatas, camisa blanca.`
+        },
+        // Afro
+        {
+            id: 'bullerengue',
+            nombre: 'Bullerengue',
+            archivo: 'Afro/bullerengue.png',
+            region: 'Caribe / Urabá',
+            anio: 'Tradicional',
+            datosCuriosos: [
+                'El traje amplio y blanco es herencia directa de las cimarronas que danzaban a la vida.',
+                'Un baile exclusivamente cantado y bailado por mujeres (y tamboreros), celebrando la fertilidad.'
+            ],
+            promptIA: `Mujer con majestuoso vestido blanco amplio completo para bailar bullerengue, encajes grandes, turbante blanco.`
+        },
+        {
+            id: 'lia',
+            nombre: 'Lia (Afrocolombiana)',
+            archivo: 'Afro/lia.png',
+            region: 'Pacífico / Caribe',
+            anio: 'Tradicional',
+            datosCuriosos: [
+                'Un traje representativo de la hermosura, resiliencia y colorido de la cultura Afrocolombiana.',
+                'Los turbantes y estampados cuentan historias de resistencia y libertad en todo el territorio.'
+            ],
+            promptIA: `Mujer afrocolombiana con atuendo tradicional de telas coloridas y estampadas, con espectacular turbante atado a la cabeza.`
+        },
+        {
+            id: 'recipiente',
+            nombre: 'Vendedora (Palenquera)',
+            archivo: 'Afro/recipiente.png',
+            region: 'San Basilio / Cartagena',
+            anio: 'Tradicional',
+            datosCuriosos: [
+                'Símbolo mundial de Colombia, con su gran recipiente (palangana) lleno de frutas tropicales en la cabeza.',
+                'El vestido está hecho con los colores vibrantes de la alegría, la libertad y el sol caribeño.'
+            ],
+            promptIA: `Mujer africana/palenquera con palangana o recipiente grande en la cabeza lleno de frutas, traje de volantes colores del arcoíris, sonrisa vibrante.`
+        }
+    ]
+};
+
+// Estado global de la aplicación
+const State = {
+    faseActual: 'limpiar',      // Inicialmente pide limpiar el polvo
+    trajeActual: 0,             // Índice del traje actual
+    trajeSeleccionado: null,    // Traje seleccionado inicialmente
+    fotoCapturada: null,        // DataURL de la foto
+    rostroDetectado: null,      // Datos del rostro detectado
+    cuerpoDetectado: false,     // Hay cuerpo completo en frame
+    contadorActivo: false,      // Contador corriendo
+    gestoCooldown: false,       // Cooldown entre gestos
+    haCambiadoTraje: false,     // Trackea si ha cambiado de traje alguna vez
+    datosCuriososInterval: null,
+    camera: null,
+    pose: null,
+    holistic: null,
+    videoElement: null,
+    canvasElement: null,
+    ctx: null,
+    bodyPixNet: null,           // Modelo BodyPix cargado
+    segmentacionData: null,     // Datos de segmentación del cuerpo
+    ultimoLandmarks: null,      // Últimos landmarks detectados
+    fotoLandmarks: null,        // Landmarks guardados al tomar la foto
+    historialDespedida: []      // Seguimiento del movimiento de la muñeca para despedida
+};
+
+// Variable para el control del volumen de la música
+let fadeInterval = null;
+
+function fadeAudio(audioElement, targetVolume, duration) {
+    if (!audioElement) return;
+    
+    if (fadeInterval) clearInterval(fadeInterval);
+    
+    const startVolume = audioElement.volume;
+    const volumeChange = targetVolume - startVolume;
+    const ticks = 20; // 20 pasos de animación
+    const tickTime = duration / ticks;
+    let currentTick = 0;
+    
+    fadeInterval = setInterval(() => {
+        currentTick++;
+        let newVol = startVolume + (volumeChange * (currentTick / ticks));
+        if (newVol > 1) newVol = 1;
+        if (newVol < 0) newVol = 0;
+        
+        audioElement.volume = newVol;
+        
+        if (currentTick >= ticks) {
+            audioElement.volume = targetVolume;
+            clearInterval(fadeInterval);
+            fadeInterval = null;
+        }
+    }, tickTime);
+}
+
+// ========================================
+// UTILIDADES
+// ========================================
+
+function $(selector) { return document.querySelector(selector); }
+function $$(selector) { return document.querySelectorAll(selector); }
+
+function showElement(el) {
+    if (typeof el === 'string') el = $(el);
+    if (el) el.classList.remove('hidden');
+}
+
+function hideElement(el) {
+    if (typeof el === 'string') el = $(el);
+    if (el) el.classList.add('hidden');
+}
+
+function cambiarFase(nuevaFase) {
+    // Ocultar todas las fases
+    $$('.fase').forEach(fase => fase.classList.remove('active'));
+
+    // Mostrar nueva fase
+    const faseEl = $(`#fase-${nuevaFase}`);
+    if (faseEl) {
+        faseEl.classList.add('active');
+        State.faseActual = nuevaFase;
+    }
+}
+
+function createFlash() {
+    const flash = document.createElement('div');
+    flash.className = 'flash';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 300);
+}
+
+function showGestureIndicator(emoji) {
+    const indicator = document.createElement('div');
+    indicator.className = 'gesto-detectado';
+    indicator.textContent = emoji;
+    document.body.appendChild(indicator);
+    setTimeout(() => indicator.remove(), 500);
+}
+
+// ========================================
+// INICIALIZACIÓN
+// ========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🎭 El Hilo que Nos Conecta - Iniciando...');
+
+    // Verificar recursos
+    checkResources();
+
+    // Inicializar event listeners
+    initEventListeners();
+
+    // Inicializar MediaPipe y cámara
+    initMediaPipe();
+});
+
+function checkResources() {
+    console.log('📦 Verificando recursos de trajes...');
+    CONFIG.trajes.forEach(traje => {
+        const img = new Image();
+        img.onload = () => console.log(`✅ ${traje.archivo} cargado`);
+        img.onerror = () => console.error(`❌ Error cargando ${traje.archivo}`);
+        img.src = traje.archivo;
+    });
+}
+
+function initEventListeners() {
+    // Pantalla Completa
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    if (btnFullscreen) {
+        btnFullscreen.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error Fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                btnFullscreen.style.display = 'none'; // Kiosk mode: oculta el botón
+            } else {
+                btnFullscreen.style.display = 'flex';
+                btnFullscreen.innerHTML = '⛶ Pantalla Completa';
+            }
+        });
+    }
+
+    // Tarjetas de categorías
+    $$('.tarjeta-cat').forEach(card => {
+        card.addEventListener('click', () => {
+            const cat = card.dataset.targetCat;
+            console.log(`📂 Categoría seleccionada: ${cat}`);
+            
+            // Ocultar tarjetas, mostrar botones
+            hideElement('#tarjetas-categorias');
+            showElement('#botones-telas');
+            
+            // Filtrar y mostrar solo los botones de esta categoría
+            $$('.btn-tela').forEach(btn => {
+                if(btn.id === 'btn-volver-categorias') {
+                    showElement(btn); // Siempre mostrar el de volver
+                } else if(btn.dataset.cat === cat) {
+                    showElement(btn);
+                } else {
+                    hideElement(btn);
+                }
+            });
+        });
+    });
+
+    // Botón volver a categorías (dentro de trajes)
+    const btnVolverCat = $('#btn-volver-categorias');
+    if (btnVolverCat) {
+        btnVolverCat.addEventListener('click', () => {
+            hideElement('#botones-telas');
+            showElement('#tarjetas-categorias');
+        });
+    }
+
+    // Botones de telas (traje específico)
+    $$('.btn-tela').forEach(btn => {
+        // Ignorar el click si es el botón de volver (ya se maneja arriba)
+        if (btn.id === 'btn-volver-categorias') return;
+        
+        btn.addEventListener('click', (e) => {
+            const tela = btn.dataset.tela;
+            const trajeId = btn.dataset.traje;
+            console.log(`🧵 Tela seleccionada: ${tela}, Traje: ${trajeId}`);
+
+            // Encontrar índice del traje
+            const trajeIndex = CONFIG.trajes.findIndex(t => t.id === trajeId);
+            if (trajeIndex !== -1) {
+                State.trajeSeleccionado = trajeIndex;
+                State.trajeActual = trajeIndex;
+                iniciarFasePreparacion();
+            }
+        });
+    });
+
+    // Botones de las Cápsulas de Datos
+    $('#btn-dato-1').addEventListener('click', () => abrirPanelCuriosidad(0));
+    $('#btn-dato-2').addEventListener('click', () => abrirPanelCuriosidad(1));
+    $('#btn-cerrar-dato').addEventListener('click', cerrarPanelCuriosidad);
+
+    // Botón volver
+    $('#btn-volver').addEventListener('click', () => {
+        resetearExperiencia();
+    });
+
+    // Botones del modal
+    $('#btn-descargar').addEventListener('click', descargarRecuerdo);
+    $('#btn-cerrar-modal').addEventListener('click', () => {
+        hideElement('#modal-foto');
+    });
+}
+
+// ========================================
+// MEDIAPIPE - INICIALIZACIÓN
+// ========================================
+
+async function initMediaPipe() {
+    console.log('🎥 Inicializando MediaPipe...');
+
+    // Configurar elementos de video
+    State.videoElement = $('#input-video');
+    State.canvasElement = $('#output-canvas');
+    State.ctx = State.canvasElement.getContext('2d');
+
+    // Configurar canvas
+    State.canvasElement.width = CONFIG.videoWidth;
+    State.canvasElement.height = CONFIG.videoHeight;
+
+    // Configurar overlay global de manos
+    State.overlayCanvas = $('#overlay-canvas');
+    if (State.overlayCanvas) {
+        State.overlayCtx = State.overlayCanvas.getContext('2d');
+        State.overlayCanvas.width = CONFIG.videoWidth;
+        State.overlayCanvas.height = CONFIG.videoHeight;
+    }
+
+    // Inicializar Pose
+    State.pose = new Pose({
+        locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }
+    });
+
+    State.pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: CONFIG.detectionConfidence,
+        minTrackingConfidence: CONFIG.detectionConfidence
+    });
+
+    State.pose.onResults(onPoseResults);
+
+    // Inicializar cámara
+    try {
+        State.camera = new Camera(State.videoElement, {
+            onFrame: async () => {
+                // Siempre enviar frames: fase 1/2 para detectar cuerpo, fase 3 para gestos
+                await State.pose.send({ image: State.videoElement });
+            },
+            width: CONFIG.videoWidth,
+            height: CONFIG.videoHeight
+        });
+
+        await State.camera.start();
+        console.log('✅ Cámara iniciada');
+
+        // Cargar BodyPix para segmentación (gratis, corre en el navegador)
+        await cargarBodyPix();
+
+        // Actualizar estado
+        $('#status-text').textContent = 'Cámara activa - Acércate al espejo';
+
+        // Iniciar música de fondo suavemente
+        const bgMusic = $('#bg-music');
+        if (bgMusic) {
+            bgMusic.volume = 0.05;
+            bgMusic.play().catch(e => console.log('Autoplay bloqueado. La música iniciará al toque de pantalla.'));
+            
+            // Por si el navegador bloqueó el autoplay, iniciar al primer click
+            document.body.addEventListener('click', () => {
+                if (bgMusic.paused) {
+                    bgMusic.volume = 0.05;
+                    bgMusic.play();
+                }
+            }, { once: true });
+        }
+
+        // Iniciar sistema de polvo (PixiJS Fase 0)
+        if (typeof DustSystem !== 'undefined') {
+            DustSystem.init('pixi-container', () => {
+                console.log("¡Polvo limpiado!");
+                hideElement('#instrucciones-polvo');
+                State.faseActual = 'espejo'; // Avanza a la fase normal
+
+                // Audio Mueve
+                const audioMueve = document.getElementById('audio-mueve');
+                if (audioMueve) audioMueve.play().catch(e => console.log('Audio bloqueado: ', e));
+
+                // Forzar revelado del UI si la persona ya está detectada
+                if (State.cuerpoDetectado) {
+                    onPersonaDetectada(true);
+                }
+            });
+            showElement('#instrucciones-polvo');
+        }
+
+    } catch (error) {
+        console.error('❌ Error al iniciar cámara:', error);
+        $('#status-text').textContent = 'Error de cámara - Recarga la página';
+    }
+}
+
+// ========================================
+// BODYPIX - CARGA Y SEGMENTACIÓN
+// ========================================
+
+async function cargarBodyPix() {
+    console.log('🤖 Cargando BodyPix...');
+    try {
+        // Cargar modelo de segmentación de cuerpo
+        State.bodyPixNet = await bodyPix.load({
+            architecture: 'MobileNetV1',
+            outputStride: 16,
+            multiplier: 0.5,  // 0.5 = más rápido, 1.0 = más preciso
+            quantBytes: 2     // 2 = buen balance precisión/velocidad
+        });
+        console.log('✅ BodyPix cargado');
+    } catch (error) {
+        console.error('❌ Error cargando BodyPix:', error);
+    }
+}
+
+async function segmentarPersona(imagen) {
+    if (!State.bodyPixNet) {
+        console.log('⚠️ BodyPix no disponible, usando fotomontaje simple');
+        return null;
+    }
+
+    console.log('🔍 Segmentando persona...');
+    try {
+        const segmentacion = await State.bodyPixNet.segmentPerson(imagen, {
+            internalResolution: 'medium',
+            segmentationThreshold: 0.7
+        });
+
+        console.log('✅ Persona segmentada');
+        return segmentacion;
+    } catch (error) {
+        console.error('❌ Error en segmentación:', error);
+        return null;
+    }
+}
+
+// ========================================
+// MEDIAPIPE - RESULTADOS
+// ========================================
+
+function onPoseResults(results) {
+    // Limpiar canvas principal
+    State.ctx.clearRect(0, 0, State.canvasElement.width, State.canvasElement.height);
+    
+    // Limpiar y alinear lienzo del overlay track
+    if (State.overlayCtx && State.videoElement.videoWidth) {
+        // MUY IMPORTANTE: Sincronizar el aspect ratio EXACTO de la cámara de video real
+        // para que object-fit: cover mueva y recorte la cámara y el dibujo por igual.
+        if (State.overlayCanvas.width !== State.videoElement.videoWidth) {
+            State.overlayCanvas.width = State.videoElement.videoWidth;
+            State.overlayCanvas.height = State.videoElement.videoHeight;
+        }
+        State.overlayCtx.clearRect(0, 0, State.overlayCanvas.width, State.overlayCanvas.height);
+    }
+
+    if (results.poseLandmarks) {
+        State.ultimoLandmarks = results.poseLandmarks;
+
+        // Dibujar elementos interactivos de la pantalla
+        if (State.overlayCtx && State.videoElement.videoWidth) {
+            
+            // Interactuar con botones virtuales en pantallas interactivas
+            if (State.faseActual === 'espejo' || State.faseActual === 'traje') {
+                checkVirtualButtonClicks(results.poseLandmarks, State.overlayCanvas);
+            }
+
+            drawHandTracking(results.poseLandmarks, State.overlayCtx, State.overlayCanvas.width, State.overlayCanvas.height);
+        }
+
+        // Procesar limpieza de polvo si estamos en fase limpiar
+        if (State.faseActual === 'limpiar' && typeof DustSystem !== 'undefined') {
+            DustSystem.processLandmarks(results.poseLandmarks);
+        }
+
+        // Verificar si hay persona completa
+        const personaDetectada = detectarPersonaCompleta(results.poseLandmarks);
+
+        if (personaDetectada !== State.cuerpoDetectado) {
+            State.cuerpoDetectado = personaDetectada;
+            onPersonaDetectada(personaDetectada);
+        }
+
+        // Si estamos en fase traje, detectar gestos
+        if (State.faseActual === 'traje' && !State.gestoCooldown) {
+            detectarGestos(results.poseLandmarks);
+        }
+    } else {
+        if (State.cuerpoDetectado) {
+            State.cuerpoDetectado = false;
+            onPersonaDetectada(false);
+        }
+    }
+}
+
+function detectarPersonaCompleta(landmarks) {
+    // Verificar puntos clave del cuerpo
+    const puntosClave = [
+        0,   // Nariz
+        11,  // Hombro izquierdo
+        12,  // Hombro derecho
+        23,  // Cadera izquierda
+        24,  // Cadera derecha
+        27,  // Tobillo izquierdo
+        28   // Tobillo derecho
+    ];
+
+    let puntosVisibles = 0;
+    puntosClave.forEach(idx => {
+        if (landmarks[idx] && landmarks[idx].visibility > CONFIG.personDetectionThreshold) {
+            puntosVisibles++;
+        }
+    });
+
+    let estaCentrado = true;
+    if (State.faseActual === 'preparacion') {
+        const hombroIzq = landmarks[11];
+        const hombroDer = landmarks[12];
+        const nariz = landmarks[0];
+
+        if (hombroIzq && hombroDer && nariz) {
+            // En fase de preparación, requerimos estar centrados en la silueta (centro X cercano a 0.5)
+            // MediaPipe: x=0 es izquierda, x=1 es derecha. La cámara está en espejo, pero MediaPipe da coordenadas en el frame.
+            const hombroX = (hombroIzq.x + hombroDer.x) / 2;
+            const hombroY = (hombroIzq.y + hombroDer.y) / 2;
+            
+            // Centro horizontal de los hombros ajustado para encajar justo en el hueco
+            if (hombroX < 0.38 || hombroX > 0.62) estaCentrado = false;
+
+            // Anchura de hombros (asegura la distancia focal y "escala")
+            const anchoHombros = Math.abs(hombroIzq.x - hombroDer.x);
+            if (anchoHombros < 0.17 || anchoHombros > 0.38) estaCentrado = false;
+
+            // ¡Altura de los hombros estricta para asegurar que están en la mitad superior de la pantalla!
+            if (hombroY < 0.30 || hombroY > 0.65) estaCentrado = false;
+        } else {
+            estaCentrado = false;
+        }
+    }
+
+    // Necesitamos al menos 5 puntos y estar centrado si estamos en preparación
+    return puntosVisibles >= 5 && estaCentrado;
+}
+
+function onPersonaDetectada(detectada) {
+    const pulse = $('.pulse');
+    const statusText = $('#status-text');
+    const bgMusic = $('#bg-music');
+
+    if (detectada) {
+        pulse.classList.add('detected');
+        statusText.textContent = '¡Persona detectada!';
+        
+        // Sube volumen levemente
+        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.4, 2000);
+
+        // Mostrar textos flotantes en fase espejo
+        if (State.faseActual === 'espejo') {
+            showElement('#textos-flotantes');
+            
+            // Mostrar tarjetas si botones-telas está oculto (estado inicial)
+            const botonesTelas = $('#botones-telas');
+            if (botonesTelas && botonesTelas.classList.contains('hidden')) {
+                showElement('#tarjetas-categorias');
+            }
+        }
+
+        // En fase preparación, verificar si iniciar contador
+        if (State.faseActual === 'preparacion' && !State.contadorActivo) {
+            iniciarContador();
+        }
+    } else {
+        pulse.classList.remove('detected');
+        statusText.textContent = 'Acércate al espejo...';
+
+        // Baja volumen de nuevo a suave
+        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.15, 2000);
+
+        if (State.faseActual === 'espejo') {
+            hideElement('#textos-flotantes');
+            hideElement('#botones-telas');
+            hideElement('#tarjetas-categorias');
+        }
+    }
+}
+
+// ========================================
+// FASE PREPARACIÓN
+// ========================================
+
+function iniciarFasePreparacion() {
+    console.log('🎯 Iniciando fase de preparación');
+    cambiarFase('preparacion');
+
+    // Configurar video de preparación
+    const prepVideo = $('#prep-video');
+    const stream = State.videoElement.srcObject;
+    if (stream) {
+        prepVideo.srcObject = stream;
+    }
+
+    // Reiniciar estado
+    State.contadorActivo = false;
+    hideElement('#contador-container');
+    showElement('#guia-cuerpo');
+    showElement('#anuncios-prep');
+}
+
+function iniciarContador() {
+    if (State.contadorActivo) return;
+
+    console.log('⏱️ Iniciando contador');
+    State.contadorActivo = true;
+
+    hideElement('#guia-cuerpo');
+    hideElement('#anuncios-prep');
+    showElement('#contador-container');
+
+    let cuenta = 3;
+    const contadorEl = $('#contador');
+    contadorEl.textContent = cuenta;
+
+    const interval = setInterval(() => {
+        cuenta--;
+
+        if (cuenta > 0) {
+            contadorEl.textContent = cuenta;
+            // Reiniciar animación
+            contadorEl.style.animation = 'none';
+            contadorEl.offsetHeight; // Trigger reflow
+            contadorEl.style.animation = 'contador-pulse 1s ease-in-out';
+        } else {
+            clearInterval(interval);
+            contadorEl.textContent = '¡Listo!';
+            setTimeout(capturarFoto, 500);
+        }
+    }, 1000);
+}
+
+// ========================================
+// CAPTURA DE FOTO
+// ========================================
+
+function capturarFoto() {
+    console.log('📸 Capturando foto...');
+
+    createFlash();
+
+    // Crear canvas temporal para la captura
+    const canvas = document.createElement('canvas');
+    canvas.width = State.videoElement.videoWidth || CONFIG.videoWidth;
+    canvas.height = State.videoElement.videoHeight || CONFIG.videoHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Dibujar frame actual del video (invertido para modo espejo)
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(State.videoElement, 0, 0, canvas.width, canvas.height);
+
+    // Guardar foto
+    State.fotoCapturada = canvas.toDataURL('image/jpeg', 0.9);
+    
+    // Guardar landmarks del momento de la foto
+    State.fotoLandmarks = State.ultimoLandmarks;
+
+    // Mostrar en imagen oculta
+    $('#img-capturada').src = State.fotoCapturada;
+
+    console.log('✅ Foto capturada');
+
+    // Procesar con IA
+    procesarConIA();
+}
+
+// ========================================
+// PROCESAMIENTO CON IA (GRATIS - BODYPIX)
+// ========================================
+
+async function procesarConIA() {
+    console.log('🤖 Procesando con BodyPix (IA local gratuita)...');
+
+    // Mostrar loading
+    cambiarFase('traje');
+    showElement('#loading-ia');
+
+    // Cargar imagen del traje
+    const traje = CONFIG.trajes[State.trajeActual];
+    $('#img-traje').src = traje.archivo;
+
+    // Esperar carga
+    await new Promise((resolve) => {
+        $('#img-traje').onload = resolve;
+        setTimeout(resolve, 1000);
+    });
+
+    // Generar fotomontaje con BodyPix
+    try {
+        await generarFotomontajeMejorado();
+        hideElement('#loading-ia');
+        iniciarExperienciaTraje();
+    } catch (error) {
+        console.error('❌ Error en fotomontaje:', error);
+        hideElement('#loading-ia');
+        // Fallback simple
+        generarFotomontaje();
+        iniciarExperienciaTraje();
+    }
+}
+
+// ========================================
+// FOTOMONTAJE CON BODYPIX (GRATIS)
+// ========================================
+
+async function generarFotomontajeMejorado() {
+    const traje = CONFIG.trajes[State.trajeActual];
+    const canvas = $('#traje-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Cargar imágenes
+    const imgPersona = new Image();
+    const imgTraje = new Image();
+
+    imgPersona.crossOrigin = 'anonymous';
+    imgTraje.crossOrigin = 'anonymous';
+
+    await new Promise((resolve, reject) => {
+        imgPersona.onload = resolve;
+        imgPersona.onerror = () => reject(new Error('Fallo al cargar imagen de persona'));
+        imgPersona.src = State.fotoCapturada;
+    });
+
+    await new Promise((resolve, reject) => {
+        imgTraje.onload = resolve;
+        imgTraje.onerror = () => {
+            console.error('No se pudo cargar la imagen del traje:', traje.archivo);
+            reject(new Error('Fallo al cargar imagen de traje'));
+        };
+        imgTraje.src = traje.archivo;
+    });
+
+    // Ajustar canvas al tamaño de la foto
+    canvas.width = imgPersona.width;
+    canvas.height = imgPersona.height;
+
+    // Segmentar persona con BodyPix
+    const segmentacion = await segmentarPersona(imgPersona);
+
+    if (segmentacion) {
+        // ========================================
+        // MODO AVANZADO: Con segmentación BodyPix
+        // ========================================
+        await aplicarFotomontajeConSegmentacion(
+            canvas, ctx, imgPersona, imgTraje, segmentacion
+        );
+    } else {
+        // ========================================
+        // MODO SIMPLE: Sin segmentación
+        // ========================================
+        aplicarFotomontajeSimple(canvas, ctx, imgPersona, imgTraje);
+    }
+}
+
+function dibujarTrajeAjustado(ctx, imgTraje, width, height, landmarks) {
+    if (!landmarks || landmarks.length === 0) {
+        ctx.drawImage(imgTraje, 0, 0, width, height);
+        return;
+    }
+
+    const hombroIzq = landmarks[11];
+    const hombroDer = landmarks[12];
+    const caderaIzq = landmarks[23];
+    const caderaDer = landmarks[24];
+
+    if (!hombroIzq || !hombroDer || !caderaIzq || !caderaDer || 
+        hombroIzq.visibility < 0.5 || hombroDer.visibility < 0.5) {
+        ctx.drawImage(imgTraje, 0, 0, width, height);
+        return;
+    }
+
+    // Calcular centro del torso superior
+    const centroTorsoX = (hombroIzq.x + hombroDer.x) / 2;
+    // Poner el centro Y un poco más abajo de los hombros (pecho)
+    const centroTorsoY = (hombroIzq.y + hombroDer.y) / 2 + 0.05;
+
+    // Distancias
+    const anchoHombros = Math.abs(hombroIzq.x - hombroDer.x);
+    const altoTorso = Math.abs(((hombroIzq.y + hombroDer.y) / 2) - ((caderaIzq.y + caderaDer.y) / 2));
+
+    // Escalas de ajuste (el PNG suele ser más ancho y largo que los landmarks base)
+    const scaleX = 2.8; 
+    const scaleY = 3.0; // Cubre piernas
+
+    const suitWidth = anchoHombros * width * scaleX;
+    // Si no detecta bien cadera/torso, usamos proporción sobre hombros
+    const altoReferencia = altoTorso > 0.1 ? altoTorso : anchoHombros * 1.5;
+    const suitHeight = altoReferencia * height * scaleY;
+
+    // Calcular X e Y (esquina superior izquierda del recorte)
+    const suitX = (centroTorsoX * width) - (suitWidth / 2);
+    // Subir un poco el traje (25% de su altura) para que el cuello coincida
+    const suitY = (centroTorsoY * height) - (suitHeight * 0.25); 
+
+    ctx.drawImage(imgTraje, suitX, suitY, suitWidth, suitHeight);
+}
+
+async function aplicarFotomontajeConSegmentacion(canvas, ctx, imgPersona, imgTraje, segmentacion) {
+    console.log('🎨 Aplicando efecto BodyPix...');
+
+    // Crear canvas temporal para la máscara
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = canvas.width;
+    maskCanvas.height = canvas.height;
+    const maskCtx = maskCanvas.getContext('2d');
+
+    // Dibujar la máscara de segmentación (persona = blanco, fondo = negro)
+    const maskImageData = maskCtx.createImageData(canvas.width, canvas.height);
+    const data = maskImageData.data;
+
+    for (let i = 0; i < segmentacion.data.length; i++) {
+        const pixelIndex = i * 4;
+        if (segmentacion.data[i] === 1) {
+            // Persona - blanco
+            data[pixelIndex] = 255;
+            data[pixelIndex + 1] = 255;
+            data[pixelIndex + 2] = 255;
+            data[pixelIndex + 3] = 255;
+        } else {
+            // Fondo - transparente
+            data[pixelIndex] = 0;
+            data[pixelIndex + 1] = 0;
+            data[pixelIndex + 2] = 0;
+            data[pixelIndex + 3] = 0;
+        }
+    }
+    maskCtx.putImageData(maskImageData, 0, 0);
+
+    // PASO 1: Fondo degradado elegante
+    const fondoGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    fondoGradient.addColorStop(0, '#2c1810');
+    fondoGradient.addColorStop(0.5, '#1a1a2e');
+    fondoGradient.addColorStop(1, '#16213e');
+    ctx.fillStyle = fondoGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // PASO 2: Crear imagen de la persona con fondo transparente
+    const personaCanvas = document.createElement('canvas');
+    personaCanvas.width = canvas.width;
+    personaCanvas.height = canvas.height;
+    const personaCtx = personaCanvas.getContext('2d');
+
+    // Aplicar máscara a la persona
+    personaCtx.drawImage(imgPersona, 0, 0);
+    personaCtx.globalCompositeOperation = 'destination-in';
+    personaCtx.drawImage(maskCanvas, 0, 0);
+
+    // PASO 3: Dibujar traje ajustado al cuerpo en canvas temporal
+    const trajeCanvas = document.createElement('canvas');
+    trajeCanvas.width = canvas.width;
+    trajeCanvas.height = canvas.height;
+    const trajeCtx = trajeCanvas.getContext('2d');
+    dibujarTrajeAjustado(trajeCtx, imgTraje, canvas.width, canvas.height, State.fotoLandmarks);
+
+    // AHORA: Aplicar el traje sobre la persona (en su mismo sistema de coordenadas original)
+    // Solo donde hay persona (efecto de ropa sobre el cuerpo)
+    personaCtx.globalCompositeOperation = 'source-atop';
+    personaCtx.globalAlpha = 0.85;
+    personaCtx.drawImage(trajeCanvas, 0, 0);
+    personaCtx.globalCompositeOperation = 'source-over';
+    personaCtx.globalAlpha = 1.0;
+
+    // PASO 4: Componer la imagen final ya fusionada con el fondo
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1); // Espejo de todo el conjunto
+    ctx.drawImage(personaCanvas, 0, 0);
+    ctx.restore();
+
+    // PASO 5: Iluminación y efectos finales
+    // Vignette sutil
+    const vignette = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2,
+        canvas.height * 0.3,
+        canvas.width / 2, canvas.height / 2,
+        canvas.height * 0.8
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.2)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    console.log('✅ Fotomontaje con BodyPix completado');
+}
+
+function aplicarFotomontajeSimple(canvas, ctx, imgPersona, imgTraje) {
+    console.log('🎨 Aplicando fotomontaje simple...');
+
+    // Crear un canvas temporal para componer la persona (sin girar) y el traje (sin girar)
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // Mismo espacio de coordenadas originales
+    tempCtx.drawImage(imgPersona, 0, 0, canvas.width, canvas.height);
+
+    tempCtx.globalCompositeOperation = 'source-over';
+    tempCtx.globalAlpha = 0.9;
+    dibujarTrajeAjustado(tempCtx, imgTraje, canvas.width, canvas.height, State.fotoLandmarks);
+    tempCtx.globalAlpha = 1.0;
+
+    // PASO 1: Fondo
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // PASO 2: Dibujar resultado final ya fusionado, con espejo
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    console.log('✅ Fotomontaje simple completado');
+}
+
+// Función original mantenida por compatibilidad - ahora redirige a la mejorada
+function generarFotomontaje() {
+    // Redirige a la versión con BodyPix
+    generarFotomontajeMejorado();
+}
+
+// ========================================
+// EXPERIENCIA DEL TRAJE
+// ========================================
+
+function iniciarExperienciaTraje() {
+    console.log('👘 Iniciando experiencia del traje');
+
+    const traje = CONFIG.trajes[State.trajeActual];
+
+    // Actualizar información
+    $('#nombre-traje').textContent = traje.nombre;
+    $('#region-traje').textContent = traje.region;
+    $('#anio-traje').textContent = traje.anio;
+    $('#traje-actual').textContent = State.trajeActual + 1;
+
+    // Iniciar datos curiosos
+    iniciarDatosCuriosos(traje);
+
+    // Asegurar que los hints de gestos estén visibles permanentemente
+    $('#gestos-hint').style.opacity = '1';
+    showElement('#gestos-hint');
+}
+
+function iniciarDatosCuriosos(traje) {
+    if (!traje.datosCuriosos || traje.datosCuriosos.length === 0) {
+        hideElement('#ui-curiosidades');
+        return;
+    }
+    
+    // Asignar al estado global
+    State.datosActuales = traje.datosCuriosos;
+    
+    // Preparar UI inicial
+    hideElement('#panel-curiosidad');
+    showElement('#ui-curiosidades');
+}
+
+function abrirPanelCuriosidad(index) {
+    if (!State.datosActuales || !State.datosActuales[index]) return;
+    $('#texto-curiosidad-expandido').textContent = State.datosActuales[index];
+    hideElement('#ui-curiosidades');
+    showElement('#panel-curiosidad');
+}
+
+function cerrarPanelCuriosidad() {
+    hideElement('#panel-curiosidad');
+    showElement('#ui-curiosidades');
+}
+
+// ========================================
+// DETECCIÓN DE GESTOS
+// ========================================
+
+function detectarGestos(landmarks) {
+    if (!landmarks) return;
+
+    // Obtener puntos clave
+    const leftWrist = landmarks[15];   // Muñeca izquierda
+    const rightWrist = landmarks[16];  // Muñeca derecha
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const nose = landmarks[0];
+
+    if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder || !nose) return;
+
+    // Calcular posiciones relativas
+    const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+    const shoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+
+    // Gesto de Salida: DESPEDIDA (Agitar mano por encima del hombro)
+    const izqArriba = leftWrist.visibility > 0.5 && leftWrist.y < leftShoulder.y;
+    const derArriba = rightWrist.visibility > 0.5 && rightWrist.y < rightShoulder.y;
+
+    if (izqArriba || derArriba) {
+        // Usar la mano que esté más alta
+        const manoActiva = (izqArriba && derArriba) ? 
+            (leftWrist.y < rightWrist.y ? leftWrist : rightWrist) : 
+            (izqArriba ? leftWrist : rightWrist);
+            
+        State.historialDespedida.push({
+            x: manoActiva.x,
+            time: Date.now()
+        });
+        
+        // Mantener el historial limpio (solo últimos 1.5 segundos)
+        State.historialDespedida = State.historialDespedida.filter(p => Date.now() - p.time < 1500);
+        
+        if (State.historialDespedida.length > 5) {
+            let cambiosDireccion = 0;
+            let dirActual = 0;
+            
+            for (let i = 1; i < State.historialDespedida.length; i++) {
+                const dx = State.historialDespedida[i].x - State.historialDespedida[i-1].x;
+                if (Math.abs(dx) > 0.015) { // umbral de movimiento horizontal
+                    const nuevaDir = Math.sign(dx);
+                    if (dirActual !== 0 && nuevaDir !== dirActual) {
+                        cambiosDireccion++;
+                    }
+                    dirActual = nuevaDir;
+                }
+            }
+            
+            // Si la mano cambió de dirección 3 o más veces: es un adiós
+            if (cambiosDireccion >= 3) {
+                console.log("👋 Despedida detectada");
+                showGestureIndicator('👋');
+                State.gestoCooldown = true;
+                State.historialDespedida = [];
+                
+                setTimeout(() => {
+                    resetearExperiencia();
+                }, 1000);
+                return;
+            }
+        }
+    } else {
+        State.historialDespedida = [];
+    }
+
+    // Gesto: Brazo derecho extendido (siguiente traje)
+    // En la imagen no reflejada (MediaPipe logic), el brazo derecho físico (16) está hacia la izquierda (x cercano a 0)
+    // Así que para alejarlo del cuerpo, debe tener un X MENOR al del hombro derecho.
+    const rightArmUp = rightWrist.y < shoulderY;
+    const rightArmRight = rightWrist.x < rightShoulder.x - 0.18; // Extendida a la derecha del usuario
+
+    if (rightArmUp && rightArmRight) {
+        cambiarTraje('siguiente');
+        return;
+    }
+
+    // Gesto: Brazo izquierdo extendido (traje anterior)
+    // El brazo izquierdo físico (15) está hacia la derecha de la imagen no reflejada (x cercano a 1)
+    const leftArmUp = leftWrist.y < shoulderY;
+    const leftArmLeft = leftWrist.x > leftShoulder.x + 0.18; // Extendida a la izquierda del usuario
+
+    if (leftArmUp && leftArmLeft) {
+        cambiarTraje('anterior');
+        return;
+    }
+
+    // Gesto: Dos manos arriba (tomar foto)
+    const bothArmsUp = leftWrist.y < nose.y && rightWrist.y < nose.y;
+
+    if (bothArmsUp) {
+        tomarFotoRecuerdo();
+    }
+}
+
+async function cambiarTraje(direccion) {
+    if (State.gestoCooldown) return;
+
+    State.gestoCooldown = true;
+
+    if (direccion === 'siguiente') {
+        State.trajeActual = (State.trajeActual + 1) % CONFIG.trajes.length;
+        showGestureIndicator('👉');
+    } else {
+        State.trajeActual = (State.trajeActual - 1 + CONFIG.trajes.length) % CONFIG.trajes.length;
+        showGestureIndicator('👈');
+    }
+
+    // Audio Navegacion (Primera vez)
+    if (!State.haCambiadoTraje) {
+        const audioNav = document.getElementById('audio-navegacion');
+        if (audioNav) audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
+        State.haCambiadoTraje = true;
+    }
+
+    console.log(`🔄 Cambiando a traje ${State.trajeActual + 1}`);
+
+    // Regenerar fotomontaje con nueva imagen
+    showElement('#loading-ia');
+
+    try {
+        await generarFotomontajeMejorado();
+        hideElement('#loading-ia');
+        iniciarExperienciaTraje();
+    } catch (error) {
+        console.error('❌ Error:', error);
+        hideElement('#loading-ia');
+        generarFotomontaje();
+        iniciarExperienciaTraje();
+    }
+
+    // Cooldown de 1.5 segundos
+    setTimeout(() => {
+        State.gestoCooldown = false;
+    }, 1500);
+}
+
+// Configuración de Cloudinary (Reemplazar con tus datos)
+const CLOUDINARY_CONFIG = {
+    cloudName: 'dqvzl4lgp',      // Cloud Name de la cuenta del usuario
+    uploadPreset: 'espejo_museo' // Upload preset que el usuario debe crear como Unsigned
+};
+
+async function subirFotoCloudinary(dataUrl) {
+    if (CLOUDINARY_CONFIG.cloudName === 'TU_CLOUD_NAME') {
+        throw new Error('Falta configuración de Cloudinary');
+    }
+
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`;
+    
+    // Cloudinary upload requiere FormData
+    const formData = new FormData();
+    formData.append('file', dataUrl);
+    formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+
+    const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        throw new Error('Error HTTP al subir la imagen');
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+}
+
+async function tomarFotoRecuerdo() {
+    if (State.gestoCooldown) return;
+
+    State.gestoCooldown = true;
+    showGestureIndicator('📸');
+
+    console.log('📸 Tomando foto de recuerdo');
+    
+    // Reproducir audio final al tomar la pose de la foto
+    const audioFinal = document.getElementById('audio-final');
+    if (audioFinal) audioFinal.play().catch(e => console.log('Audio bloqueado: ', e));
+
+    // Crear canvas de recuerdo
+    const canvasOriginal = $('#traje-canvas');
+    const canvasRecuerdo = $('#canvas-recuerdo');
+    const ctx = canvasRecuerdo.getContext('2d');
+
+    // Configurar dimensiones
+    canvasRecuerdo.width = 800;
+    canvasRecuerdo.height = 1200;
+
+    // Dibujar imagen actual
+    ctx.drawImage(canvasOriginal, 0, 0, canvasRecuerdo.width, canvasRecuerdo.height);
+
+    // Añadir marca de agua del museo (caja más grande para el texto nuevo)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(15, canvasRecuerdo.height - 160, canvasRecuerdo.width - 30, 145);
+
+    ctx.fillStyle = '#2c1810';
+    ctx.textAlign = 'center';
+    
+    ctx.font = 'bold 28px Georgia';
+    ctx.fillText('El Hilo que Nos Conecta', canvasRecuerdo.width / 2, canvasRecuerdo.height - 120);
+    
+    ctx.font = 'italic 20px Georgia';
+    ctx.fillText('Museo de Trajes de Bogotá', canvasRecuerdo.width / 2, canvasRecuerdo.height - 90);
+
+    ctx.font = '18px Arial';
+    ctx.fillText('Conoce y pruébate más trajes en nuestro museo:', canvasRecuerdo.width / 2, canvasRecuerdo.height - 60);
+    
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText('Calle 10 # 6-26, Bogotá', canvasRecuerdo.width / 2, canvasRecuerdo.height - 35);
+
+    // Mostrar modal
+    showElement('#modal-foto');
+
+    // Preparar UI del QR
+    $('#qr-container').innerHTML = '';
+    $('#qr-container').style.display = 'none';
+    $('#qr-loading').textContent = '⏳ Subiendo foto para escanear...';
+    $('#qr-loading').style.color = '#d4a574';
+    showElement('#qr-loading');
+    hideElement('#qr-instructions');
+
+    // Intentar subir imagen de forma asíncrona
+    try {
+        const dataUrl = canvasRecuerdo.toDataURL('image/jpeg', 0.8);
+        const imageUrl = await subirFotoCloudinary(dataUrl);
+
+        hideElement('#qr-loading');
+        $('#qr-container').style.display = 'block';
+        showElement('#qr-instructions');
+
+        // Generar QR
+        new QRCode($('#qr-container'), {
+            text: imageUrl,
+            width: 160,
+            height: 160,
+            colorDark : "#2c1810",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.L
+        });
+    } catch (error) {
+        console.error('Error generando QR:', error);
+        $('#qr-loading').textContent = '⚠️ Falta configurar Cloud Name y Upload Preset en app.js';
+        $('#qr-loading').style.color = '#ff4444';
+    }
+
+    setTimeout(() => {
+        State.gestoCooldown = false;
+    }, 2000);
+}
+
+function descargarRecuerdo() {
+    const canvas = $('#canvas-recuerdo');
+    const link = document.createElement('a');
+    link.download = `recuerdo-museo-trajes-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+// ========================================
+// RESETEAR EXPERIENCIA
+// ========================================
+
+function resetearExperiencia() {
+    console.log('🔄 Reseteando experiencia');
+
+    // Desactivar nube
+    if (State.nube) State.nube.active = false;
+
+    // Resetear estado general
+    State.trajeActual = 0;
+    State.trajeSeleccionado = null;
+    State.fotoCapturada = null;
+    State.contadorActivo = false;
+    State.gestoCooldown = false;
+    State.haCambiadoTraje = false;
+
+    // Volver a fase limpiar si el sistema de polvo está disponible
+    if (typeof DustSystem !== 'undefined') {
+        State.faseActual = 'limpiar';
+        DustSystem.resetDust();
+        showElement('#instrucciones-polvo');
+    } else {
+        cambiarFase('espejo');
+    }
+
+    // Ocultar elementos de UI
+    hideElement('#textos-flotantes');
+    hideElement('#tarjetas-categorias');
+    hideElement('#botones-telas');
+    hideElement('#loading-ia');
+    hideElement('#modal-foto');
+    hideElement('#ui-curiosidades');
+    hideElement('#panel-curiosidad');
+
+    // Resetear UI
+    $('#status-text').textContent = 'Acércate al espejo...';
+    $('.pulse').classList.remove('detected');
+
+    console.log('✅ Experiencia reseteada');
+}
+
+// ========================================
+// UTILIDADES ADICIONALES
+// ========================================
+
+// Prevenir zoom en móviles
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('gesturechange', (e) => e.preventDefault());
+document.addEventListener('gestureend', (e) => e.preventDefault());
+
+// Prevenir scroll
+window.addEventListener('scroll', (e) => {
+    window.scrollTo(0, 0);
+});
+
+// ========================================
+// TRACKING VISUAL (MANOS)
+// ========================================
+
+function drawHandTracking(landmarks, ctx, width, height) {
+    if (!ctx) return;
+
+    const p = (idx) => {
+        const lm = landmarks[idx];
+        if (!lm || lm.visibility < 0.5) return null;
+        return { x: lm.x * width, y: lm.y * height };
+    };
+
+    const drawLine = (p1, p2) => {
+        if (!p1 || !p2) return;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+    };
+
+    const drawPoint = (pt, isWrist = false) => {
+        if (!pt) return;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, isWrist ? 10 : 5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+    };
+
+    ctx.save();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = 'rgba(212, 165, 116, 0.9)'; // Color de la marca del museo
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Obtener puntos principales de los brazos
+    const lShoulder = p(11), lElbow = p(13), lWrist = p(15);
+    const rShoulder = p(12), rElbow = p(14), rWrist = p(16);
+
+    // Índices de los dedos
+    const lPinky = p(17), lIndex = p(19), lThumb = p(21);
+    const rPinky = p(18), rIndex = p(20), rThumb = p(22);
+
+    // Dibujar Brazo Izquierdo (Físico)
+    drawLine(lShoulder, lElbow); drawLine(lElbow, lWrist);
+    drawLine(lWrist, lPinky); drawLine(lWrist, lIndex); drawLine(lWrist, lThumb);
+    drawPoint(lShoulder); drawPoint(lElbow); drawPoint(lWrist, true);
+
+    // Dibujar Brazo Derecho (Físico)
+    drawLine(rShoulder, rElbow); drawLine(rElbow, rWrist);
+    drawLine(rWrist, rPinky); drawLine(rWrist, rIndex); drawLine(rWrist, rThumb);
+    drawPoint(rShoulder); drawPoint(rElbow); drawPoint(rWrist, true);
+
+    ctx.restore();
+}
+
+function updateAndDrawCloud(landmarks, ctx, width, height) {
+    if (!State.nube || !State.nube.active) return;
+    const n = State.nube;
+
+    if (!n.visible) {
+        n.spawnTimer--;
+        if (n.spawnTimer <= 0) {
+            n.visible = true;
+            n.hits = 0;
+            n.vx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+            n.vy = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+            n.x = width / 2 - n.width / 2;
+            n.y = Math.random() * (height * 0.4) + 50; // spawn aleatorio arriba
+        }
+        return; // No dibujar si es invisible
+    }
+
+    if (n.cooldown > 0) n.cooldown--;
+
+    // Físicas básicas con limitador del canvas
+    n.x += n.vx;
+    n.y += n.vy;
+
+    if (n.x < 10) { n.x = 10; n.vx *= -1; }
+    if (n.x + n.width > width - 10) { n.x = width - n.width - 10; n.vx *= -1; }
+    if (n.y < 10) { n.y = 10; n.vy *= -1; }
+    // Margen debajo
+    if (n.y + n.height > height * 0.70) { n.y = height * 0.70 - n.height; n.vy *= -1; }
+
+    // Interacción / Colisión con las manos
+    if (landmarks) {
+        const wrists = [landmarks[15], landmarks[16]];
+        wrists.forEach(w => {
+            if (w && w.visibility > 0.4) {
+                const wx = w.x * width;
+                const wy = w.y * height;
+                
+                const cnx = n.x + n.width/2;
+                const cny = n.y + n.height/2;
+                const dx = cnx - wx;
+                const dy = cny - wy;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                if (dist < 100) { // Hit radio
+                    n.vx += (dx / dist) * 2.5;
+                    n.vy += (dy / dist) * 2.5;
+                    
+                    if (n.cooldown <= 0) {
+                        n.hits++;
+                        n.cooldown = 20; // frame cooldown (~0.6s)
+                        
+                        if (n.hits >= 2) { // 2 toques y desaparece
+                            n.visible = false;
+                            n.spawnTimer = 210; // ~7 segundos de retraso
+                            n.textIndex = (n.textIndex + 1) % n.texts.length;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Fricción constante
+    const speed = Math.sqrt(n.vx*n.vx + n.vy*n.vy);
+    if (speed > 2.5) {
+        n.vx *= 0.96;
+        n.vy *= 0.96;
+    } else if (speed < 0.5) {
+        n.vx *= 1.05;
+        n.vy *= 1.05;
+    }
+
+    // --- Dibujo Visual ---
+    ctx.save();
+    // Parpadeo visual cuando la tocan (transición roja)
+    if (n.cooldown > 10) {
+        ctx.fillStyle = 'rgba(150, 50, 50, 0.9)';
+    } else {
+        ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+    }
+    
+    ctx.strokeStyle = 'rgba(212, 165, 116, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.roundRect(n.x, n.y, n.width, n.height, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    // Texto Nube
+    ctx.save();
+    ctx.translate(n.x + n.width/2, 0); // Ir al centro logométrico para escribir
+    ctx.scale(-1, 1); // Doblemente espejado resulta en lectura normal real
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#d4a574';
+    ctx.font = 'italic 14px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('☁️ ¿Sabías que?', 0, n.y + 20);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px Arial';
+    
+    const text = n.texts[n.textIndex] || "";
+    const words = text.split(' ');
+    let line = '';
+    let currentY = n.y + 40;
+    const maxWidth = n.width - 30;
+
+    for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && i > 0) {
+            ctx.fillText(line, 0, currentY);
+            line = words[i] + ' ';
+            currentY += 18;
+        } else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line, 0, currentY);
+
+    ctx.restore(); // Restaura escala espejada
+    ctx.restore(); // Restaura nube base
+}
+
+// Interacción virtual de las manos con el DOM
+function checkVirtualButtonClicks(landmarks, baseCanvas) {
+    if (!landmarks || State.botonCooldown) return;
+    
+    // Seleccionar todos los elementos interactuables (telas, cápsulas, cerrar, volver, descargas) que están presentes
+    const botonesNodeList = document.querySelectorAll('.interactable');
+    if (!botonesNodeList.length) return;
+    
+    // Extraer solo los elementos que son visibles actualmente (no ocultos ni dentro de un .hidden parent)
+    const botones = Array.from(botonesNodeList).filter(btn => {
+        return btn.offsetWidth > 0 && btn.offsetHeight > 0 && btn.closest('.hidden') === null;
+    });
+    
+    if (!botones.length) return;
+
+    const wrists = [landmarks[15], landmarks[16]];
+    const videoObj = State.videoElement;
+    if (!videoObj.videoWidth) return;
+
+    // Trackear botones tocados en ESTE frame para prevenir parpadeo (1 mano vs la otra)
+    const hoveredButtons = new Set();
+
+    wrists.forEach(w => {
+        if (!w || w.visibility < 0.4) return;
+        
+        let rawX = w.x * videoObj.videoWidth;
+        let rawY = w.y * videoObj.videoHeight;
+        
+        const canvasRect = baseCanvas.getBoundingClientRect();
+        const scale = Math.max(canvasRect.width / videoObj.videoWidth, canvasRect.height / videoObj.videoHeight);
+        
+        const drawnWidth = videoObj.videoWidth * scale;
+        const drawnHeight = videoObj.videoHeight * scale;
+        const offsetX = (canvasRect.width - drawnWidth) / 2;
+        const offsetY = (canvasRect.height - drawnHeight) / 2;
+        
+        // El video y canvas están reflejados por CSS: => X física real visible en la pantalla
+        let screenX = canvasRect.left + offsetX + (drawnWidth - (rawX * scale));
+        let screenY = canvasRect.top + offsetY + (rawY * scale);
+        
+        botones.forEach(btn => {
+            const rect = btn.getBoundingClientRect();
+            // Margen generoso (Hitbox)
+            const margin = 20;
+            if (screenX >= rect.left - margin && screenX <= rect.right + margin &&
+                screenY >= rect.top - margin && screenY <= rect.bottom + margin) {
+                hoveredButtons.add(btn); // Registrar colisión positiva
+            }
+        });
+    });
+
+    // Procesar el estado de hover consolidado para que ambas manos puedan interactuar limpiamente
+    botones.forEach(btn => {
+        if (hoveredButtons.has(btn)) {
+            // Hover Visual Effect
+            btn.style.transform = 'scale(1.2)';
+            btn.style.boxShadow = '0 0 30px rgba(255, 255, 255, 0.9)';
+            btn.style.borderColor = '#d4a574';
+            
+            if (!btn.dataset.hoverTime) {
+                btn.dataset.hoverTime = Date.now();
+            } else {
+                // Clic sostenido 1s
+                if (Date.now() - parseInt(btn.dataset.hoverTime) > 1000) {
+                    State.botonCooldown = true;
+                    btn.dataset.hoverTime = '';
+                    btn.style.transform = '';
+                    btn.click();
+                    
+                    setTimeout(() => State.botonCooldown = false, 2000);
+                }
+            }
+        } else {
+            // No touch = Resetear estado
+            if (btn.dataset.hoverTime) {
+                btn.style.transform = '';
+                btn.style.boxShadow = '';
+                btn.style.borderColor = '';
+                btn.dataset.hoverTime = '';
+            }
+        }
+    });
+}
+
+console.log('✅ App.js cargado correctamente');

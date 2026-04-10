@@ -1,0 +1,984 @@
+/* ========================================
+   EL HILO QUE NOS CONECTA
+   Museo de Trajes de Bogotá
+   Estilos principales
+   ======================================== */
+
+/* Reset y base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --color-primario: #2c1810;
+    --color-secundario: #8b4513;
+    --color-accent: #d4a574;
+    --color-texto: #f5f5f5;
+    --color-texto-dark: #1a1a1a;
+    --fuente-titulo: 'Playfair Display', Georgia, serif;
+    --fuente-cuerpo: 'Lato', -apple-system, sans-serif;
+    --radio-borde: 12px;
+    --sombra: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --sombra-intensa: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--fuente-cuerpo);
+    background: #000;
+    color: var(--color-texto);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ========================================
+   FASES
+   ======================================== */
+
+.fase {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.fase.active {
+    display: flex;
+    flex-direction: column;
+    opacity: 1;
+}
+
+/* ========================================
+   FASE 1: EL ESPEJO
+   ======================================== */
+
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#input-video, #prep-video {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+#output-canvas, #prep-canvas, #traje-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transform: scaleX(-1);
+}
+
+/* Indicador de detección */
+.detection-status {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-size: 14px;
+    z-index: 10;
+}
+
+.pulse {
+    width: 12px;
+    height: 12px;
+    background: #ff4444;
+    border-radius: 50%;
+    animation: pulse-animation 1.5s infinite;
+}
+
+.pulse.detected {
+    background: #44ff44;
+}
+
+@keyframes pulse-animation {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Textos flotantes */
+#textos-flotantes {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.texto-flotante {
+    font-family: var(--fuente-titulo);
+    font-size: clamp(1.5rem, 5vw, 2.5rem);
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 20px rgba(212, 165, 116, 0.5);
+    opacity: 0;
+    animation: flotar-texto 12s infinite;
+    position: absolute;
+    width: 90vw;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: normal; /* Ahora el texto puede hacer saltos de línea */
+    word-wrap: break-word;
+}
+
+#texto-1 { animation-delay: 0s; }
+#texto-2 { animation-delay: 4s; }
+#texto-3 { animation-delay: 8s; }
+
+@keyframes flotar-texto {
+    0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    5% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    28% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    33% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    100% { opacity: 0; }
+}
+
+/* Botón Pantalla Completa */
+.btn-flotante-top-right {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(20, 10, 5, 0.8);
+    border: 2px solid var(--color-accent);
+    color: #fff;
+    padding: 10px 15px;
+    border-radius: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.3s;
+    font-family: Arial, sans-serif;
+}
+
+.btn-flotante-top-right:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(212, 165, 116, 0.6);
+}
+
+/* Tarjetas de Categorías (FASE 1) */
+.tarjetas-categorias {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 30px;
+    z-index: 10;
+    padding: 20px;
+    width: 90%;
+    max-width: 1000px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.tarjeta-cat {
+    position: relative;
+    width: 140px;
+    height: 180px;
+    border-radius: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: transparent;
+    padding: 0;
+    box-shadow: var(--sombra);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.tarjeta-cat:hover {
+    transform: translateY(-10px) scale(1.05);
+    border-color: var(--color-accent);
+    box-shadow: 0 10px 30px rgba(212, 165, 116, 0.6);
+}
+
+.tarjeta-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.tarjeta-titulo {
+    position: relative;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 10px 0;
+    font-family: var(--fuente-titulo);
+    font-size: 1.1rem;
+    font-weight: bold;
+    width: 100%;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Botones de telas */
+.botones-telas {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+    padding: 10px;
+    width: 95%;
+    max-width: 800px;
+}
+
+.btn-tela {
+    width: 100px;
+    height: 140px;
+    border-radius: 15px;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: transparent;
+    padding: 0;
+    box-shadow: var(--sombra);
+}
+
+.btn-tela.empty-return {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    align-self: center;
+}
+
+.btn-tela:hover {
+    transform: scale(1.1);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 30px rgba(212, 165, 116, 0.6);
+}
+
+.btn-tela:active {
+    transform: scale(0.95);
+}
+
+.tela-preview {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+}
+
+/* ========================================
+   FASE 2: PREPARACIÓN
+   ======================================== */
+
+.anuncios-prep {
+    position: absolute;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 5;
+    width: 90%;
+}
+
+.anuncio {
+    font-family: var(--fuente-titulo);
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    color: #fff;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.9);
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    left: 0;
+    animation: ciclo-anuncio 9s infinite;
+    padding: 0 20px;
+}
+
+.anuncio:nth-child(1) { animation-delay: 0s; }
+.anuncio:nth-child(2) { animation-delay: 3s; }
+.anuncio:nth-child(3) { animation-delay: 6s; }
+
+@keyframes ciclo-anuncio {
+    0%, 100% { opacity: 0; transform: translateY(20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(0); }
+    40% { opacity: 0; transform: translateY(-20px); }
+}
+
+/* Contador */
+.contador-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 10;
+}
+
+#contador {
+    font-size: clamp(8rem, 25vw, 15rem);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(212, 165, 116, 0.8), 4px 4px 8px rgba(0,0,0,0.5);
+    animation: contador-pulse 1s ease-in-out;
+    line-height: 1;
+}
+
+@keyframes contador-pulse {
+    0% { transform: scale(1.5); opacity: 0; }
+    50% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.contador-texto {
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    margin-top: 20px;
+}
+
+/* Guía de cuerpo */
+.guia-cuerpo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.fullscreen-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.instruccion-cuerpo {
+    position: absolute;
+    bottom: 12vh;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 2px 2px 8px rgba(0,0,0,1);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 15px 30px;
+    border-radius: 30px;
+    border: 1px solid rgba(212, 165, 116, 0.5);
+    white-space: nowrap;
+}
+
+/* ========================================
+   FASE 3: TRAJE
+   ======================================== */
+
+.traje-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+}
+
+#traje-canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Loading IA */
+.loading-ia {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(212, 165, 116, 0.3);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-top: 30px;
+    font-size: 1.5rem;
+    color: var(--color-accent);
+    font-family: var(--fuente-titulo);
+}
+
+.loading-subtext {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Datos curiosos */
+.datos-curiosos {
+    position: absolute;
+    top: 20%;
+    left: 5%;
+    right: 5%;
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Eliminados los datos curiosos HTML estáticos - Reemplazados por Nubes físicas en JS */
+
+/* Info del traje */
+.info-traje {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    padding: 15px 30px;
+    border-radius: var(--radio-borde);
+}
+
+#nombre-traje {
+    font-family: var(--fuente-titulo);
+    font-size: clamp(1.5rem, 5vw, 2.2rem);
+    color: var(--color-accent);
+    margin-bottom: 10px;
+}
+
+#ubicacion-traje {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.pin-ubicacion {
+    width: 20px;
+    height: 20px;
+    background: #ff4444;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.6);
+}
+
+#region-traje {
+    font-size: 1rem;
+    color: #fff;
+}
+
+#anio-traje {
+    font-size: 0.9rem;
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    padding: 3px 10px;
+    border-radius: 15px;
+}
+
+/* Gestos hint */
+.gestos-hint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 15px 5px 30px 5px; /* Más padding abajo por la transición suave */
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+    z-index: 10;
+}
+
+.gesto {
+    display: flex;
+    flex-direction: row; /* Icono a la izquierda, texto a la derecha */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    line-height: 1.1;
+    text-align: left;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 4px rgba(0,0,0,1);
+    background: transparent;
+    padding: 0;
+    border: none;
+    backdrop-filter: none;
+}
+
+.gesto-icon {
+    font-size: 1.6rem;
+}
+
+/* Contador de trajes */
+.contador-trajes {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 1rem;
+    color: #fff;
+    z-index: 5;
+}
+
+#traje-actual {
+    color: var(--color-accent);
+    font-weight: bold;
+}
+
+/* Botón volver */
+.btn-volver {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    z-index: 10;
+    transition: all 0.3s ease;
+}
+
+.btn-volver:hover {
+    background: rgba(212, 165, 116, 0.3);
+    border-color: var(--color-accent);
+}
+
+/* ========================================
+   MODAL FOTO
+   ======================================== */
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+    padding: 20px;
+    border-radius: 20px;
+    max-width: 95%;
+    max-height: 95vh;
+    overflow-y: auto;
+    text-align: center;
+    border: 2px solid var(--color-accent);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.modal-title {
+    font-family: var(--fuente-titulo);
+    color: var(--color-accent);
+    margin-bottom: 15px;
+    font-size: 1.8rem;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+#canvas-recuerdo {
+    max-width: 100%;
+    max-height: 40vh;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    margin-bottom: 15px;
+}
+
+#qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border-radius: 15px;
+    padding: 15px;
+    border: 1px dashed rgba(212, 165, 116, 0.4);
+}
+
+.qr-decorated {
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(255,255,255,0.2);
+    margin: 10px 0;
+    display: none;
+}
+
+/* Modificamos el canvas/img que genera qrcode.js para que no desborde */
+.qr-decorated img, .qr-decorated canvas {
+    margin: 0 auto;
+    max-width: 130px;
+    max-height: 130px;
+}
+
+#qr-loading {
+    color: var(--color-accent);
+    font-size: 1.1rem;
+    animation: pulse-animation 1.5s infinite;
+}
+
+#qr-instructions {
+    margin-top: 10px;
+}
+
+.qr-text-main {
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    margin-bottom: 3px;
+}
+
+.qr-text-highlight {
+    color: var(--color-accent);
+    font-family: var(--fuente-titulo);
+    font-size: 1.3rem;
+    font-style: italic;
+    margin-bottom: 5px;
+}
+
+.qr-text-sub {
+    color: #a0a0a0;
+    font-size: 0.8rem;
+}
+
+/* ========================================
+   OVERLAY DE MANOS
+   ======================================== */
+#overlay-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 60;
+    transform: scaleX(-1);
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.btn-primario, .btn-secundario {
+    padding: 12px 30px;
+    border-radius: 25px;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.btn-primario {
+    background: var(--color-accent);
+    color: var(--color-primario);
+}
+
+.btn-primario:hover {
+    background: #c49464;
+    transform: scale(1.05);
+}
+
+.btn-secundario {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secundario:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ========================================
+   UTILIDADES
+   ======================================== */
+
+.hidden {
+    display: none !important;
+}
+
+/* Animación flash de cámara */
+.flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 999;
+    animation: flash-animation 0.3s ease-out;
+}
+
+@keyframes flash-animation {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* Indicador de gesto detectado */
+.gesto-detectado {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 4rem;
+    z-index: 50;
+    animation: gesto-pop 0.5s ease-out;
+    text-shadow: 0 0 30px rgba(212, 165, 116, 0.8);
+}
+
+@keyframes gesto-pop {
+    0% { transform: translate(-50%, -50%) scale(0); }
+    50% { transform: translate(-50%, -50%) scale(1.3); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 480px) {
+    .btn-tela {
+        width: 70px;
+        height: 70px;
+    }
+
+    .botones-telas {
+        gap: 20px;
+        bottom: 30px;
+    }
+
+    .gestos-hint {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 15px;
+    }
+
+    .info-traje {
+        bottom: 100px;
+        padding: 12px 20px;
+    }
+
+    .dato-curioso {
+        padding: 12px 18px;
+        font-size: 0.85rem;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-height: 500px) and (orientation: landscape) {
+    .texto-flotante {
+        font-size: 1.2rem;
+    }
+
+    .anuncio {
+        font-size: 1rem;
+    }
+
+    .btn-tela {
+        width: 60px;
+        height: 60px;
+    }
+
+    .info-traje {
+        bottom: 80px;
+    }
+}
+
+/* ========================================
+   CÁPSULAS Y UI DE CURIOSIDADES (Fase 3)
+   ======================================== */
+.ui-curiosidades {
+    position: absolute;
+    top: 15vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    text-align: center;
+    z-index: 10;
+}
+
+.curiosidades-header {
+    font-size: clamp(1rem, 3vw, 1.4rem);
+    color: #fff;
+    text-shadow: 2px 2px 4px #000;
+    margin-bottom: 15px;
+    font-style: italic;
+}
+
+.capsulas-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.btn-capsula {
+    background: rgba(44, 24, 16, 0.85);
+    border: 2px solid var(--color-accent);
+    color: #fff;
+    padding: 12px 25px;
+    border-radius: 30px;
+    font-size: clamp(0.9rem, 2vw, 1.2rem);
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    pointer-events: auto;
+}
+
+.btn-capsula:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+}
+
+/* Modal de Curiosidad Expandida */
+.panel-curiosidad {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 85%;
+    max-width: 600px;
+    background: rgba(20, 10, 5, 0.95);
+    border: 2px solid var(--color-accent);
+    border-radius: 20px;
+    padding: 30px;
+    z-index: 20;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    pointer-events: auto;
+}
+
+.btn-cerrar {
+    align-self: flex-end;
+    background: #ff4444;
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-cerrar:hover {
+    transform: scale(1.1);
+}
+
+.panel-contenido {
+    font-size: clamp(1.2rem, 4vw, 1.6rem);
+    color: #f5f5f5;
+    line-height: 1.5;
+    font-style: italic;
+    padding: 10px;
+}
+
+/* ========================================
+   MODIFICACIONES DE DISEÑO (IPAD 11" GRID)
+   ======================================== */
+   
+/* Subir los 3 botones principales a la altura de D7 (Fila 7 = mitad de la pantalla) */
+.botones-telas {
+    top: 50vh !important;
+    bottom: auto !important;
+}
+
+/* Cuadro de información del traje: Escalado en celdas B9 a I11 */
+#info-traje {
+    position: absolute !important;
+    top: 66.6vh !important;     /* Inicia en la fila 9 */
+    left: 10vw !important;      /* Inicia en columna B */
+    width: 80vw !important;     /* Abarca hasta la columna I */
+    height: 25vh !important;    /* Termina en la fila 11 */
+    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: rgba(20, 10, 5, 0.4); /* Fondo translúcido opcional para definir la caja */
+    border-radius: 20px;
+}
+
+#nombre-traje {
+    font-size: clamp(2rem, 4vw, 3rem) !important;
+}
+
+#ubicacion-traje {
+    font-size: clamp(1.2rem, 2.5vw, 1.8rem) !important;
+}
+
+/* Botón "Volver" en la captura (casilla H3) */
+#btn-cerrar-modal {
+    position: fixed !important;
+    top: 16.6vh !important;     /* Inicia en la fila 3 */
+    left: 70vw !important;      /* Inicia en columna H */
+    transform: none !important;
+    z-index: 9999 !important;
+    font-size: 1.2rem !important;
+    padding: 15px 30px !important;
+}
