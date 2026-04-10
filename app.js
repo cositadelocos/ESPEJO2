@@ -450,70 +450,73 @@ async function initMediaPipe() {
 
     State.pose.onResults(onPoseResults);
 
-    // Inicializar cámara - Búsqueda estricta de hardware para evitar el Gran Angular en iPad
+    // Inicializar cámara - Selector Dinámico de Lentes para iPad
     try {
         let stream;
         
-        // 1. Pedir cámara general primero para obtener permisos y poder leer los nombres reales
+        // 1. Pedir cámara general primero para obtener permisos y poder leer los nombres
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         
-        // 2. Listar y filtrar todas las cámaras disponibles
+        // 2. Listar todas las cámaras disponibles
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoCameras = devices.filter(d => d.kind === 'videoinput');
         
-        let idCamaraNormal = null;
-        console.log("Cámaras detectadas: ", videoCameras.map(d => d.label));
-
-        // 3. Buscar una cámara frontal que sea la normal y descartar "Ultra Wide", "Desk View" o parecidas
-        for (const cam of videoCameras) {
-            const nom = cam.label.toLowerCase();
-            // Buscar explícitamente "front" (frontal) pero rechazar las gran angulares
-            if (nom.includes('front') && !nom.includes('ultra') && !nom.includes('wide') && !nom.includes('desk')) {
-                idCamaraNormal = cam.deviceId;
-                break;
-            }
-        }
-        
-        // Si no hay "front" segura, usar la primera que no diga ultra wide ni back
-        if (!idCamaraNormal) {
-            const segura = videoCameras.find(c => !c.label.toLowerCase().includes('ultra') && !c.label.toLowerCase().includes('wide') && !c.label.toLowerCase().includes('back'));
-            if (segura) idCamaraNormal = segura.deviceId;
-        }
-
         // Apagar el stream de prueba
         stream.getTracks().forEach(t => t.stop());
 
-        // 4. Iniciar la cámara correcta
-        if (idCamaraNormal) {
-            console.log("Forzando el uso de la cámara: ID ", idCamaraNormal);
+        let currentCameraIndex = 0;
+
+        // Función interna para arrancar una cámara específica de la lista
+        const iniciarCamara = async (index) => {
+            if (State.videoElement.srcObject) {
+                State.videoElement.srcObject.getTracks().forEach(t => t.stop());
+            }
+
+            const cam = videoCameras[index];
+            if (!cam) return;
+
+            console.log("Probando lente:", cam.label, "ID:", cam.deviceId);
             stream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
                 video: {
-                    deviceId: { exact: idCamaraNormal },
+                    deviceId: cam.deviceId ? { exact: cam.deviceId } : undefined,
                     width: { ideal: CONFIG.videoWidth },
                     height: { ideal: CONFIG.videoHeight }
                 }
             });
-        } else {
-            console.log("No se pudo distinguir la cámara, usando facingMode: user");
-            stream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                    facingMode: 'user', 
-                    width: { ideal: CONFIG.videoWidth },
-                    height: { ideal: CONFIG.videoHeight }
-                }
+
+            State.videoElement.srcObject = stream;
+            State.videoElement.onloadedmetadata = () => {
+                State.videoElement.play();
+                if (index === currentCameraIndex) procesarFrame();
+            };
+        };
+
+        // Encontrar una buena cámara inicial (que no sea trasera ni escritorio)
+        currentCameraIndex = Math.max(0, videoCameras.findIndex(c => 
+            c.label.toLowerCase().includes('front') && 
+            !c.label.toLowerCase().includes('ultra') && 
+            !c.label.toLowerCase().includes('desk')
+        ));
+        
+        // Lógica del botón "Cambiar Lente" en pantalla
+        const btnCambiarLente = document.getElementById('btn-cambiar-camara');
+        if (btnCambiarLente) {
+            btnCambiarLente.addEventListener('click', async () => {
+                currentCameraIndex = (currentCameraIndex + 1) % videoCameras.length;
+                btnCambiarLente.textContent = "Cargando lente " + (currentCameraIndex + 1) + "/" + videoCameras.length;
+                await iniciarCamara(currentCameraIndex);
+                setTimeout(() => { btnCambiarLente.textContent = "📷 Cambiar Lente (" + (currentCameraIndex + 1) + "/" + videoCameras.length + ")"; }, 1000);
             });
         }
 
-        State.videoElement.srcObject = stream;
-        
         // Loop de envío de frames a MediaPipe
+        let loopActivo = false;
         const procesarFrame = async () => {
+            if (!loopActivo) loopActivo = true;
             if (State.videoElement.videoWidth > 0 && !State.videoElement.paused) {
                 await State.pose.send({ image: State.videoElement });
             }
-            // Usa el callback óptimo si está disponible, sino requestAnimationFrame
             if ('requestVideoFrameCallback' in State.videoElement) {
                 State.videoElement.requestVideoFrameCallback(procesarFrame);
             } else {
@@ -521,12 +524,10 @@ async function initMediaPipe() {
             }
         };
 
-        State.videoElement.onloadedmetadata = () => {
-            State.videoElement.play();
-            procesarFrame();
-        };
+        // Iniciar la primera cámara
+        await iniciarCamara(currentCameraIndex);
         
-        console.log('✅ Cámara iniciada con forzado de hardware.');
+        console.log('✅ Cámara iniciada con selector manual.');
 
         // Cargar BodyPix para segmentación (gratis, corre en el navegador)
         await cargarBodyPix();
