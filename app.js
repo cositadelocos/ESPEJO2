@@ -539,14 +539,14 @@ async function initMediaPipe() {
         // Iniciar música de fondo suavemente
         const bgMusic = $('#bg-music');
         if (bgMusic) {
-            bgMusic.volume = 0.015; // Volumen reducido para que no sea muy invasiva
+            bgMusic.volume = 0.01; // Volumen reducido para que no sea muy invasiva
             bgMusic.play().catch(e => console.log('Autoplay bloqueado. La música iniciará al toque de pantalla.'));
             
             // Por si el navegador bloqueó el autoplay, iniciar al primer click
             document.body.addEventListener('click', () => {
                 unlockAudios();
                 if (bgMusic.paused) {
-                    bgMusic.volume = 0.015;
+                    bgMusic.volume = 0.01;
                     bgMusic.play();
                 }
             }, { once: true });
@@ -748,7 +748,7 @@ function onPersonaDetectada(detectada) {
         statusText.textContent = '¡Persona detectada!';
         
         // Sube volumen levemente
-        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.4, 2000);
+        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.05, 2000);
 
         // Mostrar textos flotantes en fase espejo
         if (State.faseActual === 'espejo') {
@@ -770,7 +770,7 @@ function onPersonaDetectada(detectada) {
         statusText.textContent = 'Acércate al espejo...';
 
         // Baja volumen de nuevo a suave
-        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.15, 2000);
+        if (bgMusic && !bgMusic.paused) fadeAudio(bgMusic, 0.01, 2000);
 
         if (State.faseActual === 'espejo') {
             hideElement('#textos-flotantes');
