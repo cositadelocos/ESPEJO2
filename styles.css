@@ -522,16 +522,7 @@ html, body {
 
 /* Gestos hint */
 .gestos-hint {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
-    padding: 15px 5px 30px 5px; /* Más padding abajo por la transición suave */
-    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-    z-index: 10;
+    display: none !important;
 }
 
 .gesto {
