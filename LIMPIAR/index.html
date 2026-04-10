@@ -1,0 +1,982 @@
+<!--
+═══════════════════════════════════════════════════════════════════════════════════════
+ANÁLISIS DE REPOSITORIOS - FINDINGS REPORT
+═══════════════════════════════════════════════════════════════════════════════════════
+
+1. ESPEJO (https://github.com/cositadelocos/ESPEJO)
+   - Usa MediaPipe Pose vía CDN: https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js
+   - Usa MediaPipe Camera Utils: https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js
+   - Inicialización:
+     * Crea instancia Pose con new Pose({locateFile: ...})
+     * Configura pose.setOptions({modelComplexity: 1, smoothLandmarks: true})
+     * Asigna pose.onResults(callback)
+     * Usa Camera(video, {onFrame: async () => await pose.send({image: video})})
+   - Sistema de coordenadas: Landmarks son normalizados 0-1 (x, y, z)
+   - Renderizado: Canvas API para composición de trajes sobre video
+   - Efecto espejo: video.style.transform = 'scaleX(-1)'
+
+2. WebAR.rocks.hand (https://github.com/WebAR-rocks/WebAR.rocks.hand)
+   - Librería WebGL para detección de manos en tiempo real
+   - Inicialización: WEBARROCKSHAND.init({...})
+   - Callback recibe: detectState con landmarks (puntos clave de la mano)
+   - Índice de muñeca (WRIST): landmark[0] según convención MediaPipe
+   - PERO: Para este proyecto usamos MediaPipe Pose de ESPEJO en lugar de WebAR.rocks.hand
+
+3. PixiJS (https://github.com/pixijs/pixijs)
+   - Motor de renderizado 2D WebGL/WebGPU
+   - Usado vía CDN: https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js
+   - Estructura básica: PIXI.Application, PIXI.Sprite, PIXI.Texture, PIXI.Filter
+   - Permite shaders personalizados para efectos de máscara
+
+═══════════════════════════════════════════════════════════════════════════════════════
+IMPLEMENTACIÓN - DUST CLEANING EXPERIENCE
+═══════════════════════════════════════════════════════════════════════════════════════
+Basado en los findings anteriores, este archivo implementa:
+- MediaPipe Pose de ESPEJO para tracking de muñecas (landmarks 15, 16, 17, 18)
+- Canvas mask system inspirado en ESPEJO
+- PixiJS para capa de polvo con shader personalizado
+- Efecto espejo consistente
+- Re-acumulación de polvo (~25 segundos)
+- Debug mode con tecla D
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limpieza de Polvo - Experiencia Interactiva</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #1a1a1a;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Video oculto - solo se usa como fuente de textura */
+    #input-video {
+      position: fixed;
+      top: -9999px;
+      left: -9999px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Canvas de debug - opcional */
+    #debug-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #debug-canvas.active {
+      opacity: 1;
+    }
+
+    #debug-info {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #0f0;
+      padding: 10px 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 14px;
+      z-index: 101;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #debug-info.active {
+      opacity: 1;
+    }
+
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      color: white;
+    }
+
+    #loading-screen h1 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    #loading-screen p {
+      font-size: 1.2em;
+      margin-bottom: 30px;
+      opacity: 0.8;
+      text-align: center;
+      max-width: 600px;
+      padding: 0 20px;
+    }
+
+    #start-button {
+      padding: 15px 40px;
+      font-size: 1.2em;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    #start-button:hover {
+      transform: scale(1.05);
+      background: #45a049;
+    }
+
+    #start-button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #instructions {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      z-index: 50;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Video de entrada (webcam) - oculto -->
+  <video id="input-video" playsinline></video>
+
+  <!-- Contenedor de PixiJS -->
+  <div id="canvas-container"></div>
+
+  <!-- Canvas de debug -->
+  <canvas id="debug-canvas"></canvas>
+  <div id="debug-info">
+    Muñecas detectadas: <span id="wrists-count">0</span> | FPS: <span id="fps">0</span><br>
+    Presiona D para alternar debug
+  </div>
+
+  <!-- Pantalla de carga -->
+  <div id="loading-screen">
+    <h1>✨ Limpieza de Polvo ✨</h1>
+    <p>Mueve tus muñecas frente a la cámara para limpiar el polvo y revelar tu reflejo.<br>
+    El polvo vuelve a acumularse después de un tiempo.</p>
+    <div class="spinner" id="spinner"></div>
+    <button id="start-button">Iniciar Experiencia</button>
+  </div>
+
+  <!-- Instrucciones -->
+  <div id="instructions" class="hidden">
+    La cámara se ve debajo del polvo • Mueve las muñecas para limpiar • Presiona D para ver manos (debug)
+  </div>
+
+  <!-- Scripts -->
+  <!-- PixiJS v7.3.2 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+  <!-- MediaPipe Pose -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+  <!-- MediaPipe Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // CONFIGURACIÓN Y CONSTANTES
+    // ═══════════════════════════════════════════════════════════════════════════════
+    const CONFIG = {
+      MASK_SIZE: 512,
+      DUST_FADE_RATE: 0.0008,      // ~25 segundos para re-acumular a 60fps
+      MIN_BRUSH_RADIUS: 0.06,      // En coordenadas UV (0-1)
+      MAX_BRUSH_RADIUS: 0.15,      // En coordenadas UV (0-1)
+      WRIST_MULTIPLIER: 2.5,       // Multiplicador para tamaño de brocha
+      VISIBILITY_THRESHOLD: 0.5,   // Umbral de visibilidad de landmarks
+      FIRST_CONTACT_FRAMES: 3,     // Frames de impacto inicial
+      TRAIL_STEPS: 6,              // Pasos de interpolación para trail
+    };
+
+    // Índices de landmarks MediaPipe Pose
+    const LANDMARKS = {
+      LEFT_WRIST: 15,
+      RIGHT_WRIST: 16,
+      LEFT_PINKY: 17,
+      RIGHT_PINKY: 18,
+      LEFT_INDEX: 19,
+      RIGHT_INDEX: 20,
+      LEFT_THUMB: 21,
+      RIGHT_THUMB: 22,
+    };
+
+    // Conexiones de la mano para debug (dibujar líneas entre estos puntos)
+    const HAND_CONNECTIONS = {
+      left: [
+        [LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_THUMB],
+        [LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_INDEX],
+        [LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_PINKY],
+        [LANDMARKS.LEFT_THUMB, LANDMARKS.LEFT_INDEX],
+        [LANDMARKS.LEFT_INDEX, LANDMARKS.LEFT_PINKY],
+      ],
+      right: [
+        [LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_THUMB],
+        [LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_INDEX],
+        [LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_PINKY],
+        [LANDMARKS.RIGHT_THUMB, LANDMARKS.RIGHT_INDEX],
+        [LANDMARKS.RIGHT_INDEX, LANDMARKS.RIGHT_PINKY],
+      ]
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // VARIABLES GLOBALES
+    // ═══════════════════════════════════════════════════════════════════════════════
+    let app;
+    let videoElement;
+    let maskCanvas, maskCtx;
+    let pose;
+    let camera;
+    let videoTexture, maskTexture;
+    let webcamSprite, dustSprite;
+    let dustFilter;
+    let isDebugMode = false;
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 0;
+
+    // Variables estado de limpieza
+    let isCleaningFinished = false;
+    let cleanPercentage = 0;
+    let renderFrameCount = 0;
+
+    // Estado de muñecas para tracking
+    const wristState = {
+      left: { prev: null, visible: false, firstContact: 0 },
+      right: { prev: null, visible: false, firstContact: 0 },
+    };
+
+    // Mouse fallback
+    let mousePos = { x: 0.5, y: 0.5, active: false };
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // INICIALIZACIÓN
+    // ═══════════════════════════════════════════════════════════════════════════════
+    document.getElementById('start-button').addEventListener('click', init);
+
+    async function init() {
+      const btn = document.getElementById('start-button');
+      const spinner = document.getElementById('spinner');
+
+      btn.disabled = true;
+      btn.textContent = 'Cargando...';
+      spinner.style.display = 'block';
+
+      try {
+        await initPixi();
+        await initMediaPipe();
+        await startCamera();
+
+        // Ocultar pantalla de carga
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('instructions').classList.remove('hidden');
+
+        // Iniciar loops
+        startDetectionLoop();
+        startRenderLoop();
+
+        // Configurar tecla de debug
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'd' || e.key === 'D') {
+            toggleDebugMode();
+          }
+        });
+
+        // Mouse fallback
+        setupMouseFallback();
+
+      } catch (error) {
+        console.error('Error de inicialización:', error);
+        btn.textContent = 'Error: ' + error.message;
+        spinner.style.display = 'none';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // PIXIJS SETUP
+    // ═══════════════════════════════════════════════════════════════════════════════
+    async function initPixi() {
+      app = new PIXI.Application({
+        resizeTo: window,
+        backgroundColor: 0x1a1a1a,
+        antialias: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+
+      document.getElementById('canvas-container').appendChild(app.view);
+
+      // Crear canvas de máscara (offscreen)
+      maskCanvas = document.createElement('canvas');
+      maskCanvas.width = CONFIG.MASK_SIZE;
+      maskCanvas.height = CONFIG.MASK_SIZE;
+      maskCtx = maskCanvas.getContext('2d');
+
+      // Inicializar máscara a negro (polvoriento)
+      maskCtx.fillStyle = 'black';
+      maskCtx.fillRect(0, 0, CONFIG.MASK_SIZE, CONFIG.MASK_SIZE);
+
+      // Crear textura de máscara
+      maskTexture = PIXI.Texture.from(maskCanvas);
+
+      // Crear elemento de video
+      videoElement = document.getElementById('input-video');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // MEDIAPIPE POSE SETUP (basado en ESPEJO)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    async function initMediaPipe() {
+      // Crear instancia de Pose (mismo patrón que ESPEJO)
+      pose = new Pose({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }
+      });
+
+      // Configurar opciones (similar a ESPEJO)
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      // Callback de resultados
+      pose.onResults(onPoseResults);
+    }
+
+    async function startCamera() {
+      // Primero intentar obtener el stream de la cámara directamente
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        videoElement.srcObject = stream;
+        videoElement.play();
+      } catch (e) {
+        console.log('Fallback a Camera Utils');
+      }
+
+      // Usar MediaPipe Camera Utils (patrón de ESPEJO)
+      camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await pose.send({ image: videoElement });
+        },
+        facingMode: 'user'
+      });
+
+      await camera.start();
+
+      // Asegurar que el video esté reproduciéndose
+      videoElement.play().catch(e => console.log('Video ya reproduciéndose'));
+      
+      // Esperar a que el video tenga dimensiones antes de crear sprites
+      if (videoElement.videoWidth === 0) {
+        videoElement.addEventListener('loadedmetadata', () => {
+          createSprites();
+        }, { once: true });
+      } else {
+        createSprites();
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // CREAR SPRITES PIXIJS
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function createSprites() {
+      // 1. Sprite de webcam (fondo) - PRIMERO en el stage
+      videoTexture = PIXI.Texture.from(videoElement);
+      videoTexture.baseTexture.resource.autoPlay = true;
+      videoTexture.baseTexture.resource.updateFPS = 60;
+
+      webcamSprite = new PIXI.Sprite(videoTexture);
+
+      // Escalar para llenar pantalla manteniendo aspect ratio
+      const screenAspect = window.innerWidth / window.innerHeight;
+      const videoAspect = videoElement.videoWidth / videoElement.videoHeight || 1.77;
+
+      if (screenAspect > videoAspect) {
+        webcamSprite.width = window.innerWidth;
+        webcamSprite.height = window.innerWidth / videoAspect;
+      } else {
+        webcamSprite.height = window.innerHeight;
+        webcamSprite.width = window.innerHeight * videoAspect;
+      }
+
+      // Volver a aplicar el efecto espejo (el set de width/height resetea el scale.x a positivo)
+      webcamSprite.scale.x = -Math.abs(webcamSprite.scale.x);
+
+      // Centrar
+      webcamSprite.anchor.set(0.5);
+      webcamSprite.x = window.innerWidth / 2;
+      webcamSprite.y = window.innerHeight / 2;
+
+      // Asegurar que sea visible
+      webcamSprite.alpha = 1;
+      webcamSprite.visible = true;
+
+      app.stage.addChild(webcamSprite);
+
+      // 2. Crear textura de polvo (procedural)
+      const dustTexture = createDustTexture();
+
+      // 3. Sprite de polvo
+      dustSprite = new PIXI.Sprite(dustTexture);
+      dustSprite.width = window.innerWidth;
+      dustSprite.height = window.innerHeight;
+      dustSprite.x = 0;
+      dustSprite.y = 0;
+
+      // Shader de máscara para el polvo
+      dustFilter = new PIXI.Filter(null, `
+        precision mediump float;
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        uniform sampler2D cleanMask;
+
+        void main() {
+          vec4 dust = texture2D(uSampler, vTextureCoord);
+          float cleaned = texture2D(cleanMask, vTextureCoord).r;
+
+          // Aplicar máscara: blanco = limpio (transparente/dust.a = 0), negro = polvo (opaco)
+          // Multiplicar alpha por (1 - cleaned) para que las áreas limpias sean transparentes
+          dust.a = dust.a * (1.0 - cleaned);
+
+          gl_FragColor = dust;
+        }
+      `, {
+        cleanMask: maskTexture,
+      });
+
+      dustSprite.filters = [dustFilter];
+      app.stage.addChild(dustSprite);
+
+      // 4. Configurar canvas de debug
+      const debugCanvas = document.getElementById('debug-canvas');
+      debugCanvas.width = window.innerWidth;
+      debugCanvas.height = window.innerHeight;
+    }
+
+    // Crear textura de polvo procedural
+    function createDustTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      // LIMPIAR primero (transparente)
+      ctx.clearRect(0, 0, 1280, 720);
+
+      // Base color beige cálido con ALFA para que se vea la cámara debajo
+      ctx.fillStyle = 'rgba(200, 169, 110, 0.75)'; // 75% opacidad
+      ctx.fillRect(0, 0, 1280, 720);
+
+      // Crear textura de ruido
+      const noiseCanvas = document.createElement('canvas');
+      noiseCanvas.width = 200;
+      noiseCanvas.height = 200;
+      const noiseCtx = noiseCanvas.getContext('2d');
+
+      for (let i = 0; i < 200; i++) {
+        for (let j = 0; j < 200; j++) {
+          const gray = Math.floor(Math.random() * 50 + 100);
+          noiseCtx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, 0.3)`;
+          noiseCtx.fillRect(i, j, 1, 1);
+        }
+      }
+
+      // Aplicar ruido como patrón
+      const pattern = ctx.createPattern(noiseCanvas, 'repeat');
+      ctx.fillStyle = pattern;
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillRect(0, 0, 1280, 720);
+
+      // Añadir motas de polvo
+      ctx.globalCompositeOperation = 'source-over';
+      for (let i = 0; i < 500; i++) {
+        const x = Math.random() * 1280;
+        const y = Math.random() * 720;
+        const size = Math.random() * 3 + 1;
+        const opacity = Math.random() * 0.3 + 0.1;
+
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(139, 119, 75, ${opacity})`;
+        ctx.fill();
+      }
+
+      return PIXI.Texture.from(canvas);
+    }
+
+    // Guardar landmarks actuales para debug
+    let currentLandmarks = null;
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // MANEJO DE RESULTADOS DE POSE
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function onPoseResults(results) {
+      if (!results.poseLandmarks) return;
+
+      const landmarks = results.poseLandmarks;
+      currentLandmarks = landmarks; // Guardar para debug
+
+      // Procesar muñeca izquierda (índice 15)
+      processWrist(
+        landmarks[LANDMARKS.LEFT_WRIST],
+        landmarks[LANDMARKS.LEFT_PINKY],
+        'left'
+      );
+
+      // Procesar muñeca derecha (índice 16)
+      processWrist(
+        landmarks[LANDMARKS.RIGHT_WRIST],
+        landmarks[LANDMARKS.RIGHT_PINKY],
+        'right'
+      );
+
+      // Dibujar manos completas en modo debug
+      if (isDebugMode) {
+        drawDebugHands(landmarks);
+      }
+    }
+
+    function processWrist(wrist, pinky, side) {
+      // Verificar visibilidad
+      if (!wrist || wrist.visibility < CONFIG.VISIBILITY_THRESHOLD) {
+        wristState[side].visible = false;
+        wristState[side].firstContact = 0;
+        return;
+      }
+
+      // Detectar primer contacto
+      if (!wristState[side].visible) {
+        wristState[side].firstContact = CONFIG.FIRST_CONTACT_FRAMES;
+      }
+      wristState[side].visible = true;
+
+      // Calcular radio de brocha basado en distancia muñeca-mejique
+      const dx = wrist.x - pinky.x;
+      const dy = wrist.y - pinky.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      let radiusUV = distance * CONFIG.WRIST_MULTIPLIER;
+
+      // Aplicar límites
+      radiusUV = Math.max(CONFIG.MIN_BRUSH_RADIUS, Math.min(CONFIG.MAX_BRUSH_RADIUS, radiusUV));
+
+      // Doblar tamaño en primer contacto
+      if (wristState[side].firstContact > 0) {
+        radiusUV *= 2;
+        wristState[side].firstContact--;
+      }
+
+      // Convertir a píxeles de máscara
+      const wristX = (1.0 - wrist.x) * CONFIG.MASK_SIZE; // Flip X para espejo
+      const wristY = wrist.y * CONFIG.MASK_SIZE;
+      const radiusPx = radiusUV * CONFIG.MASK_SIZE;
+
+      // Dibujar trail si hay posición previa
+      const prev = wristState[side].prev;
+      if (prev) {
+        drawWristTrail(prev.x, prev.y, wristX, wristY, radiusPx);
+      }
+
+      // Dibujar círculo actual
+      drawSoftCircle(maskCtx, wristX, wristY, radiusPx);
+
+      // Guardar posición previa
+      wristState[side].prev = { x: wristX, y: wristY };
+
+      // Debug
+      if (isDebugMode) {
+        drawDebugWrist(wristX, wristY, radiusPx, side);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // DIBUJADO DE MÁSCARA
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function drawWristTrail(x1, y1, x2, y2, radius) {
+      for (let i = 0; i <= CONFIG.TRAIL_STEPS; i++) {
+        const t = i / CONFIG.TRAIL_STEPS;
+        const ix = x1 + (x2 - x1) * t;
+        const iy = y1 + (y2 - y1) * t;
+        drawSoftCircle(maskCtx, ix, iy, radius);
+      }
+    }
+
+    function drawSoftCircle(ctx, x, y, radius) {
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+      gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.8)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // MOUSE FALLBACK
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function setupMouseFallback() {
+      window.addEventListener('mousemove', (e) => {
+        mousePos.x = (1.0 - e.clientX / window.innerWidth) * CONFIG.MASK_SIZE;
+        mousePos.y = (e.clientY / window.innerHeight) * CONFIG.MASK_SIZE;
+        mousePos.active = true;
+      });
+
+      window.addEventListener('mousedown', () => {
+        mousePos.active = true;
+      });
+    }
+
+    function processMouseFallback() {
+      if (!mousePos.active) return;
+
+      const radiusPx = CONFIG.MIN_BRUSH_RADIUS * CONFIG.MASK_SIZE * 1.5;
+
+      // Simular muñeca con mouse
+      drawSoftCircle(maskCtx, mousePos.x, mousePos.y, radiusPx);
+
+      if (isDebugMode) {
+        drawDebugWrist(mousePos.x, mousePos.y, radiusPx, 'mouse');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // DEBUG
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function toggleDebugMode() {
+      isDebugMode = !isDebugMode;
+      document.getElementById('debug-canvas').classList.toggle('active', isDebugMode);
+      document.getElementById('debug-info').classList.toggle('active', isDebugMode);
+    }
+
+    // Dibujar manos completas en debug (palma + dedos)
+    function drawDebugHands(landmarks) {
+      const debugCanvas = document.getElementById('debug-canvas');
+      const ctx = debugCanvas.getContext('2d');
+
+      // Definir landmarks de cada mano
+      const handLandmarks = {
+        left: [
+          landmarks[LANDMARKS.LEFT_WRIST],
+          landmarks[LANDMARKS.LEFT_THUMB],
+          landmarks[LANDMARKS.LEFT_INDEX],
+          landmarks[LANDMARKS.LEFT_PINKY],
+        ],
+        right: [
+          landmarks[LANDMARKS.RIGHT_WRIST],
+          landmarks[LANDMARKS.RIGHT_THUMB],
+          landmarks[LANDMARKS.RIGHT_INDEX],
+          landmarks[LANDMARKS.RIGHT_PINKY],
+        ]
+      };
+
+      // Dibujar cada mano
+      ['left', 'right'].forEach(side => {
+        const color = side === 'left' ? '#00ff00' : '#00aaff';
+        const hand = handLandmarks[side];
+        const connections = HAND_CONNECTIONS[side];
+
+        // Verificar que los landmarks son visibles
+        const visiblePoints = hand.filter(lm => lm && lm.visibility > CONFIG.VISIBILITY_THRESHOLD);
+        if (visiblePoints.length < 2) return;
+
+        // Dibujar líneas de conexión (esqueleto de la mano)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+
+        connections.forEach(([startIdx, endIdx]) => {
+          const start = landmarks[startIdx];
+          const end = landmarks[endIdx];
+
+          if (start && end && start.visibility > CONFIG.VISIBILITY_THRESHOLD && end.visibility > CONFIG.VISIBILITY_THRESHOLD) {
+            const x1 = (1.0 - start.x) * window.innerWidth;
+            const y1 = start.y * window.innerHeight;
+            const x2 = (1.0 - end.x) * window.innerWidth;
+            const y2 = end.y * window.innerHeight;
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+          }
+        });
+
+        // Dibujar área de la palma (polígono semi-transparente)
+        const palmPoints = [LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_THUMB, LANDMARKS.LEFT_INDEX, LANDMARKS.LEFT_PINKY];
+        const actualPoints = palmPoints.map(idx => landmarks[idx]).filter(lm => lm && lm.visibility > CONFIG.VISIBILITY_THRESHOLD);
+
+        if (actualPoints.length >= 3) {
+          ctx.beginPath();
+          actualPoints.forEach((lm, i) => {
+            const x = (1.0 - lm.x) * window.innerWidth;
+            const y = lm.y * window.innerHeight;
+            if (i === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          });
+          ctx.closePath();
+          ctx.fillStyle = side === 'left' ? 'rgba(0, 255, 0, 0.15)' : 'rgba(0, 170, 255, 0.15)';
+          ctx.fill();
+        }
+
+        // Dibujar puntos en cada landmark (círculos más grandes)
+        hand.forEach((lm, index) => {
+          if (!lm || lm.visibility < CONFIG.VISIBILITY_THRESHOLD) return;
+
+          const x = (1.0 - lm.x) * window.innerWidth;
+          const y = lm.y * window.innerHeight;
+
+          // Círculo exterior
+          ctx.beginPath();
+          ctx.arc(x, y, 12, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          // Círculo interior (blanco)
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = 'white';
+          ctx.fill();
+
+          // Etiqueta del punto
+          const labels = ['MUÑECA', 'PULGAR', 'ÍNDICE', 'MEÑIQUE'];
+          ctx.font = 'bold 11px Arial';
+          ctx.fillStyle = color;
+          ctx.fillText(labels[index], x + 15, y - 10);
+        });
+      });
+    }
+
+    function drawDebugWrist(x, y, radius, side) {
+      const debugCanvas = document.getElementById('debug-canvas');
+      const ctx = debugCanvas.getContext('2d');
+
+      // Convertir coordenadas de máscara a píxeles de pantalla
+      const screenX = (1.0 - x / CONFIG.MASK_SIZE) * window.innerWidth;
+      const screenY = (y / CONFIG.MASK_SIZE) * window.innerHeight;
+      const screenRadius = (radius / CONFIG.MASK_SIZE) * Math.min(window.innerWidth, window.innerHeight);
+
+      // Círculo de área de brocha (área que se está limpiando)
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = side === 'left' ? 'rgba(255, 255, 0, 0.6)' : 'rgba(255, 200, 0, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Etiqueta de área de limpieza
+      ctx.font = '10px Arial';
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+      ctx.fillText('ÁREA LIMPIA', screenX - 30, screenY - screenRadius - 5);
+    }
+
+    function clearDebugCanvas() {
+      const debugCanvas = document.getElementById('debug-canvas');
+      const ctx = debugCanvas.getContext('2d');
+      ctx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // LOOPS PRINCIPALES
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function startDetectionLoop() {
+      // MediaPipe ya está corriendo vía Camera.onFrame
+    }
+
+    function startRenderLoop() {
+      app.ticker.add(() => {
+        // 1. Forzar actualización del video PRIMERO
+        if (videoTexture && videoElement.readyState >= 2) {
+          videoTexture.baseTexture.update();
+        }
+
+        if (!isCleaningFinished) {
+          // 2. Re-acumulación de polvo progresiva
+          maskCtx.fillStyle = `rgba(0, 0, 0, ${CONFIG.DUST_FADE_RATE})`;
+          maskCtx.fillRect(0, 0, CONFIG.MASK_SIZE, CONFIG.MASK_SIZE);
+
+          // Revisar nivel de limpieza cada 30 frames para no afectar rendimiento
+          renderFrameCount++;
+          if (renderFrameCount % 30 === 0) {
+            checkCleanliness();
+          }
+        } else {
+          // Ya terminó de limpiar! Hacer transición suave para quitar completamente el filtro
+          if (dustSprite && dustSprite.alpha > 0) {
+            dustSprite.alpha -= 0.01; // Ajustar velocidad de desvanecimiento
+            if (dustSprite.alpha <= 0) {
+              dustSprite.alpha = 0;
+              dustSprite.visible = false;
+            }
+          }
+        }
+
+        // 3. Procesar mouse fallback
+        processMouseFallback();
+
+        // 4. Actualizar texturas
+        if (maskTexture) maskTexture.update();
+
+        // 5. Actualizar debug
+        if (isDebugMode) {
+          clearDebugCanvas();
+          updateFPS();
+          updateWristsCount();
+        }
+      });
+    }
+
+    function checkCleanliness() {
+      const imgData = maskCtx.getImageData(0, 0, CONFIG.MASK_SIZE, CONFIG.MASK_SIZE).data;
+      let cleanPixels = 0;
+      let totalSamples = 0;
+
+      // Solo evaluamos el canal Rojo de 1 de cada 16 pixeles para optimizar (saltos de 64 bytes)
+      for (let i = 0; i < imgData.length; i += 64) {
+        if (imgData[i] > 128) { // Canal rojo (r,g,b,a)
+          cleanPixels++;
+        }
+        totalSamples++;
+      }
+
+      cleanPercentage = cleanPixels / totalSamples;
+      
+      // Si más del 75% del espejo está limpio, quitamos el efecto por completo
+      if (cleanPercentage > 0.75) {
+        isCleaningFinished = true;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // UTILIDADES
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function updateFPS() {
+      frameCount++;
+      const now = performance.now();
+      const delta = now - lastTime;
+
+      if (delta >= 1000) {
+        fps = Math.round((frameCount * 1000) / delta);
+        frameCount = 0;
+        lastTime = now;
+        document.getElementById('fps').textContent = fps;
+      }
+    }
+
+    function updateWristsCount() {
+      let count = 0;
+      if (wristState.left.visible) count++;
+      if (wristState.right.visible) count++;
+      if (mousePos.active) count++;
+      document.getElementById('wrists-count').textContent = count;
+    }
+
+    // Manejar resize
+    window.addEventListener('resize', () => {
+      if (webcamSprite && videoElement.videoWidth) {
+        const screenAspect = window.innerWidth / window.innerHeight;
+        const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+
+        if (screenAspect > videoAspect) {
+          webcamSprite.width = window.innerWidth;
+          webcamSprite.height = window.innerWidth / videoAspect;
+        } else {
+          webcamSprite.height = window.innerHeight;
+          webcamSprite.width = window.innerHeight * videoAspect;
+        }
+
+        // Mantener el efecto espejo
+        webcamSprite.scale.x = -Math.abs(webcamSprite.scale.x);
+
+        webcamSprite.x = window.innerWidth / 2;
+        webcamSprite.y = window.innerHeight / 2;
+      }
+
+      if (dustSprite) {
+        dustSprite.width = window.innerWidth;
+        dustSprite.height = window.innerHeight;
+      }
+
+      const debugCanvas = document.getElementById('debug-canvas');
+      debugCanvas.width = window.innerWidth;
+      debugCanvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
