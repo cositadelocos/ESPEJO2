@@ -209,7 +209,8 @@ const State = {
     segmentacionData: null,     // Datos de segmentación del cuerpo
     ultimoLandmarks: null,      // Últimos landmarks detectados
     fotoLandmarks: null,        // Landmarks guardados al tomar la foto
-    historialDespedida: []      // Seguimiento del movimiento de la muñeca para despedida
+    historialDespedida: [],     // Seguimiento del movimiento de la muñeca para despedida
+    idleTimeout: null           // Timeout para reiniciar cuando no hay persona
 };
 
 // Variable para el control del volumen de la música
@@ -736,6 +737,12 @@ function onPersonaDetectada(detectada) {
     const statusText = $('#status-text');
     const bgMusic = $('#bg-music');
 
+    // Manejo del temporizador de inactividad
+    if (State.idleTimeout) {
+        clearTimeout(State.idleTimeout);
+        State.idleTimeout = null;
+    }
+
     if (detectada) {
         pulse.classList.add('detected');
         statusText.textContent = '¡Persona detectada!';
@@ -769,6 +776,15 @@ function onPersonaDetectada(detectada) {
             hideElement('#textos-flotantes');
             hideElement('#botones-telas');
             hideElement('#tarjetas-categorias');
+        }
+
+        // Iniciar cuenta regresiva para reiniciar la experiencia si nadie aparece por 7 segundos.
+        // Evitamos reiniciar si ya estamos en fase limpiar.
+        if (State.faseActual !== 'limpiar') {
+            State.idleTimeout = setTimeout(() => {
+                console.log("Nadie detectado por 7 segundos. Reiniciando experiencia al polvo...");
+                resetearExperiencia();
+            }, 7000);
         }
     }
 }
