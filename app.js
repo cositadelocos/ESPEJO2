@@ -197,6 +197,7 @@ const State = {
     contadorActivo: false,      // Contador corriendo
     gestoCooldown: false,       // Cooldown entre gestos
     haCambiadoTraje: false,     // Trackea si ha cambiado de traje alguna vez
+    audiosUnlocked: false,      // Define si los audios ya se desbloquearon
     datosCuriososInterval: null,
     camera: null,
     pose: null,
@@ -317,6 +318,7 @@ function initEventListeners() {
     const btnFullscreen = document.getElementById('btn-fullscreen');
     if (btnFullscreen) {
         btnFullscreen.addEventListener('click', () => {
+            unlockAudios(); // Desbloquear audios en primera interacción
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => {
                     console.error(`Error Fullscreen: ${err.message}`);
@@ -476,6 +478,7 @@ async function initMediaPipe() {
             
             // Por si el navegador bloqueó el autoplay, iniciar al primer click
             document.body.addEventListener('click', () => {
+                unlockAudios();
                 if (bgMusic.paused) {
                     bgMusic.volume = 0.05;
                     bgMusic.play();
@@ -1682,3 +1685,33 @@ function checkVirtualButtonClicks(landmarks, baseCanvas) {
 }
 
 console.log('✅ App.js cargado correctamente');
+
+// Desbloqueo forzado de audios por políticas de navegadores
+function unlockAudios() {
+    if (State.audiosUnlocked) return;
+    console.log('🔓 Desbloqueando audios por primera interacción...');
+    
+    // Lista de IDs de tus audios
+    const audios = ['audio-inicio', 'audio-mueve', 'audio-navegacion', 'audio-final'];
+    
+    audios.forEach(id => {
+        const audio = document.getElementById(id);
+        if (audio) {
+            // Reproducir y pausar inmediatamente con volumen 0 para desbloquear
+            const originalVolume = audio.volume;
+            audio.volume = 0;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    audio.volume = originalVolume;
+                }).catch(e => {
+                    console.log(`Audios: No se pudo desbloquear ${id}`, e);
+                });
+            }
+        }
+    });
+
+    State.audiosUnlocked = true;
+}
