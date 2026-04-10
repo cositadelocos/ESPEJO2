@@ -50,7 +50,7 @@ const CONFIG = {
         },
         {
             id: 'francisca',
-            nombre: 'Francisca',
+            nombre: 'María Francisca de Villanova',
             archivo: 'Hispanico/francisca.png',
             region: 'Región Andina / Hispánico',
             anio: 'Colonial / Siglo XIX',
@@ -87,7 +87,7 @@ const CONFIG = {
         },
         {
             id: 'shipibo',
-            nombre: 'Shipibo',
+            nombre: 'Traje mujer shipibo',
             archivo: 'Indigena/shipibo.png',
             region: 'Amazonía',
             anio: 'Ancestral',
@@ -99,7 +99,7 @@ const CONFIG = {
         },
         {
             id: 'wayu',
-            nombre: 'Wayuu',
+            nombre: 'Vestimenta wayu',
             archivo: 'Indigena/wayu.png',
             region: 'La Guajira',
             anio: 'Ancestral / Actual',
@@ -124,7 +124,7 @@ const CONFIG = {
         },
         {
             id: 'mapale',
-            nombre: 'Mapalé',
+            nombre: 'Traje Baile Mapalé',
             archivo: 'Mestizaje/mapale.png',
             region: 'Caribe',
             anio: 'Tradicional',
@@ -149,7 +149,7 @@ const CONFIG = {
         // Afro
         {
             id: 'bullerengue',
-            nombre: 'Bullerengue',
+            nombre: 'Vestido tradición Bullerengue',
             archivo: 'Afro/bullerengue.png',
             region: 'Caribe / Urabá',
             anio: 'Tradicional',
@@ -161,7 +161,7 @@ const CONFIG = {
         },
         {
             id: 'lia',
-            nombre: 'Lia (Afrocolombiana)',
+            nombre: 'Traje afroindígena',
             archivo: 'Afro/lia.png',
             region: 'Pacífico / Caribe',
             anio: 'Tradicional',
@@ -173,7 +173,7 @@ const CONFIG = {
         },
         {
             id: 'recipiente',
-            nombre: 'Vendedora (Palenquera)',
+            nombre: 'Barequera, Antioquia',
             archivo: 'Afro/recipiente.png',
             region: 'San Basilio / Cartagena',
             anio: 'Tradicional',
