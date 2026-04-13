@@ -268,20 +268,45 @@ const DustSystem = {
         
         if (this.cleanPercentage > 0.11 && !this.playedInicioAudio) {
             const audioInicio = document.getElementById('audio-inicio');
-            if (audioInicio) audioInicio.play().catch(e => console.log('Audio inicio bloqueado o no encontrado', e));
+            if (audioInicio) {
+                audioInicio.play().catch(e => console.log('Audio inicio bloqueado o no encontrado', e));
+                
+                // Para evitar que se choquen, esperamos a que termine inicio.wav y 3s despues reproducir historia.wav
+                audioInicio.onended = () => {
+                    setTimeout(() => {
+                        const audioHistoria = document.getElementById('audio-historia');
+                        if (audioHistoria && !this.playedHistoriaAudio) {
+                            this.playedHistoriaAudio = true;
+                            audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
+                            
+                            // Una vez termine "historia.wav", 3 segundos despues el espejo se limpia
+                            audioHistoria.onended = () => {
+                                setTimeout(() => {
+                                    if (!this.isFinished) {
+                                        this.forzarLimpiezaTotal();
+                                    }
+                                }, 3000);
+                            };
+                        }
+                    }, 3000);
+                };
+            }
             this.playedInicioAudio = true;
-        }
-
-        if (this.cleanPercentage > 0.35 && !this.playedHistoriaAudio) {
-            const audioHistoria = document.getElementById('audio-historia');
-            if (audioHistoria) audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
-            this.playedHistoriaAudio = true;
         }
 
         if (this.cleanPercentage > this.CONFIG.CLEAN_THRESHOLD) {
             this.isFinished = true;
             if (this.onCleaned) this.onCleaned();
         }
+    },
+
+    forzarLimpiezaTotal: function() {
+        this.cleanPercentage = 1.0;
+        this.maskCtx.fillStyle = 'white';
+        this.maskCtx.fillRect(0, 0, this.CONFIG.MASK_SIZE, this.CONFIG.MASK_SIZE);
+        if (this.maskTexture) this.maskTexture.update();
+        this.isFinished = true;
+        if (this.onCleaned) this.onCleaned();
     },
 
     // Para cuando queramos re-ensuciar el espejo para la siguiente persona
