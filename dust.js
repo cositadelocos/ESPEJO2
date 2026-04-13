@@ -15,8 +15,8 @@ const DustSystem = {
     CONFIG: {
         MASK_SIZE: 512,
         DUST_FADE_RATE: 0.0008,
-        MIN_BRUSH_RADIUS: 0.035, // Aumentado ligeramente para mejor limpieza
-        MAX_BRUSH_RADIUS: 0.07, // Aumentado ligeramente para mejor limpieza
+        MIN_BRUSH_RADIUS: 0.025, // Bajado para ser un poco más pequeño
+        MAX_BRUSH_RADIUS: 0.05, // Bajado para ser un poco más pequeño
         WRIST_MULTIPLIER: 1.5, // Menor área alrededor de la muñeca
         VISIBILITY_THRESHOLD: 0.5,
         FIRST_CONTACT_FRAMES: 3,
@@ -271,7 +271,7 @@ const DustSystem = {
             if (audioInicio) {
                 audioInicio.play().catch(e => console.log('Audio inicio bloqueado o no encontrado', e));
                 
-                // Para evitar que se choquen, esperamos a que termine inicio.wav y 3s despues reproducir historia.wav
+                // Para evitar que se choquen, esperamos a que termine inicio.wav y 1s despues reproducir historia.wav
                 audioInicio.onended = () => {
                     setTimeout(() => {
                         const audioHistoria = document.getElementById('audio-historia');
@@ -279,16 +279,16 @@ const DustSystem = {
                             this.playedHistoriaAudio = true;
                             audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
                             
-                            // Una vez termine "historia.wav", 3 segundos despues el espejo se limpia
+                            // Una vez termine "historia.wav", 1 segundo despues el espejo se limpia automático
                             audioHistoria.onended = () => {
                                 setTimeout(() => {
                                     if (!this.isFinished) {
                                         this.forzarLimpiezaTotal();
                                     }
-                                }, 3000);
+                                }, 1000);
                             };
                         }
-                    }, 3000);
+                    }, 1000);
                 };
             }
             this.playedInicioAudio = true;

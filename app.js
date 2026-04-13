@@ -671,6 +671,14 @@ function onPoseResults(results) {
             onPersonaDetectada(personaDetectada);
         }
 
+        // Si está en fase preparación y persona detectada, verificar centrado para el contador
+        if (State.faseActual === 'preparacion' && personaDetectada) {
+            const estaCentrado = verificarPersonaCentrada(results.poseLandmarks);
+            if (estaCentrado && !State.contadorActivo) {
+                iniciarContador();
+            }
+        }
+
         // Si estamos en fase traje, detectar gestos
         if (State.faseActual === 'traje' && !State.gestoCooldown) {
             detectarGestos(results.poseLandmarks);
@@ -702,34 +710,29 @@ function detectarPersonaCompleta(landmarks) {
         }
     });
 
+    return puntosVisibles >= 5;
+}
+
+function verificarPersonaCentrada(landmarks) {
     let estaCentrado = true;
-    if (State.faseActual === 'preparacion') {
-        const hombroIzq = landmarks[11];
-        const hombroDer = landmarks[12];
-        const nariz = landmarks[0];
+    const hombroIzq = landmarks[11];
+    const hombroDer = landmarks[12];
+    const nariz = landmarks[0];
 
-        if (hombroIzq && hombroDer && nariz) {
-            // En fase de preparación, requerimos estar centrados en la silueta (centro X cercano a 0.5)
-            // MediaPipe: x=0 es izquierda, x=1 es derecha. La cámara está en espejo, pero MediaPipe da coordenadas en el frame.
-            const hombroX = (hombroIzq.x + hombroDer.x) / 2;
-            const hombroY = (hombroIzq.y + hombroDer.y) / 2;
-            
-            // Centro horizontal de los hombros ajustado para encajar justo en el hueco
-            if (hombroX < 0.38 || hombroX > 0.62) estaCentrado = false;
-
-            // Anchura de hombros (asegura la distancia focal y "escala")
-            const anchoHombros = Math.abs(hombroIzq.x - hombroDer.x);
-            if (anchoHombros < 0.17 || anchoHombros > 0.38) estaCentrado = false;
-
-            // ¡Altura de los hombros estricta para asegurar que están en la mitad superior de la pantalla!
-            if (hombroY < 0.30 || hombroY > 0.65) estaCentrado = false;
-        } else {
-            estaCentrado = false;
-        }
+    if (hombroIzq && hombroDer && nariz) {
+        const hombroX = (hombroIzq.x + hombroDer.x) / 2;
+        const hombroY = (hombroIzq.y + hombroDer.y) / 2;
+        
+        if (hombroX < 0.38 || hombroX > 0.62) estaCentrado = false;
+        
+        const anchoHombros = Math.abs(hombroIzq.x - hombroDer.x);
+        if (anchoHombros < 0.17 || anchoHombros > 0.38) estaCentrado = false;
+        
+        if (hombroY < 0.30 || hombroY > 0.65) estaCentrado = false;
+    } else {
+        estaCentrado = false;
     }
-
-    // Necesitamos al menos 5 puntos y estar centrado si estamos en preparación
-    return puntosVisibles >= 5 && estaCentrado;
+    return estaCentrado;
 }
 
 function onPersonaDetectada(detectada) {
@@ -759,11 +762,6 @@ function onPersonaDetectada(detectada) {
             if (botonesTelas && botonesTelas.classList.contains('hidden')) {
                 showElement('#tarjetas-categorias');
             }
-        }
-
-        // En fase preparación, verificar si iniciar contador
-        if (State.faseActual === 'preparacion' && !State.contadorActivo) {
-            iniciarContador();
         }
     } else {
         pulse.classList.remove('detected');
