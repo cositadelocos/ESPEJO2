@@ -1146,6 +1146,15 @@ function iniciarExperienciaTraje() {
     $('#anio-traje').textContent = traje.anio;
     $('#traje-actual').textContent = State.trajeActual + 1;
 
+    // Asignar tela física si no tiene una
+    if (!traje.telaFisica) {
+        traje.telaFisica = Math.floor(Math.random() * 9) + 1;
+    }
+    const telaElement = document.getElementById('numero-tela');
+    if (telaElement) {
+        telaElement.textContent = traje.telaFisica;
+    }
+
     // Iniciar datos curiosos
     iniciarDatosCuriosos(traje);
 

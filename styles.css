@@ -496,6 +496,21 @@ html, body {
     border-radius: var(--radio-borde);
 }
 
+.anuncio-tela {
+    margin-top: 10px;
+    font-family: var(--fuente-cuerpo);
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #fff;
+    background: linear-gradient(135deg, rgba(212,165,116,0.9), rgba(139,69,19,0.9));
+    padding: 8px 20px;
+    border-radius: 20px;
+    display: inline-block;
+    box-shadow: 0 0 15px rgba(212,165,116,0.6);
+    border: 2px solid #fff;
+    animation: resplandor-burbuja 1.5s infinite alternate;
+}
+
 #nombre-traje {
     font-family: var(--fuente-titulo);
     font-size: clamp(1.5rem, 5vw, 2.2rem);
