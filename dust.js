@@ -278,38 +278,32 @@ const DustSystem = {
                 
                 // Función auxiliar para continuar con "historia"
                 const continuarConHistoria = () => {
-                    setTimeout(() => {
-                        const audioHistoria = document.getElementById('audio-historia');
-                        if (audioHistoria && !this.playedHistoriaAudio) {
-                            this.playedHistoriaAudio = true;
-                            audioHistoria.currentTime = 0;
-                            audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
-                            
-                            // Una vez termine "historia.wav", 1 segundo despues el espejo se limpia automático
-                            audioHistoria.onended = () => {
-                                setTimeout(() => {
-                                    if (!this.isFinished) {
-                                        this.forzarLimpiezaTotal();
-                                    }
-                                }, 1000);
-                            };
-                            
-                            // Respaldo por si onended falla o no dispara (asumiendo que historia no supera los ~30 seg, pero lo mejor es el listener puro)
-                        }
-                    }, 1000); // <-- 1 segundo de pausa entre audios
+                    const audioHistoria = document.getElementById('audio-historia');
+                    if (audioHistoria && !this.playedHistoriaAudio) {
+                        this.playedHistoriaAudio = true;
+                        audioHistoria.currentTime = 0;
+                        audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
+                        
+                        // Una vez termine "historia.wav", 1 segundo despues el espejo se limpia automático
+                        audioHistoria.onended = () => {
+                            setTimeout(() => {
+                                if (!this.isFinished) {
+                                    this.forzarLimpiezaTotal();
+                                }
+                            }, 1000);
+                        };
+                    }
                 };
 
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
-                        // Reproduciendo correctamente
+                        // Reproduciendo correctamente: sin pausa
                         audioInicio.onended = continuarConHistoria;
                     }).catch(e => {
                         console.log('Audio inicio bloqueado o error', e);
-                        // Si falla, pasamos directo a intentar historia como fallback
                         continuarConHistoria();
                     });
                 } else {
-                    // Navegadores viejos donde play() no devuelve promise
                     audioInicio.onended = continuarConHistoria;
                 }
             }

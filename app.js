@@ -1292,26 +1292,40 @@ async function cambiarTraje(direccion) {
         showGestureIndicator('👈');
     }
 
-    // Audio Navegacion (Primera vez)
-    if (!State.haCambiadoTraje) {
-        const audioNav = document.getElementById('audio-navegacion');
-        if (audioNav) audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
-        State.haCambiadoTraje = true;
+    // Audio Navegacion
+    const audioNav = document.getElementById('audio-navegacion');
+    if (audioNav) {
+        audioNav.currentTime = 0;
+        audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
     }
-
+    
     // Logica audios globo y fotoss despues de 3 cambios
     State.contadorCambiosTraje = (State.contadorCambiosTraje || 0) + 1;
     if (State.contadorCambiosTraje > 3 && !State.reprodujoGloboFotos) {
         State.reprodujoGloboFotos = true;
         const audioGlobo = document.getElementById('audio-globo');
         const audioFotoss = document.getElementById('audio-fotoss');
+        const audioFinal = document.getElementById('audio-final'); // Invitacion
         
-        if (audioGlobo && audioFotoss) {
-            audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
-            audioGlobo.onended = () => {
+        if (audioNav) {
+            audioNav.onended = () => {
                 setTimeout(() => {
-                    audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
-                }, 1000); // Esperar 1 segundo tras finalizar globo
+                    if (audioGlobo) {
+                        audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
+                        audioGlobo.onended = () => {
+                            setTimeout(() => {
+                                if (audioFotoss) audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
+                                if (audioFotoss && audioFinal) {
+                                    audioFotoss.onended = () => {
+                                        setTimeout(() => {
+                                            audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
+                                        }, 1000);
+                                    }
+                                }
+                            }, 1000);
+                        };
+                    }
+                }, 1000); // 1 segundo después de derecha.wav
             };
         }
     }
