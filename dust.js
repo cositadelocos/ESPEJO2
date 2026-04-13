@@ -15,13 +15,13 @@ const DustSystem = {
     CONFIG: {
         MASK_SIZE: 512,
         DUST_FADE_RATE: 0.0008,
-        MIN_BRUSH_RADIUS: 0.04, // Reducido para que cueste más limpiar
-        MAX_BRUSH_RADIUS: 0.09, // Reducido para que cueste más limpiar
+        MIN_BRUSH_RADIUS: 0.02, // Reducido aún más para que cueste más limpiar
+        MAX_BRUSH_RADIUS: 0.05, // Reducido aún más para que cueste más limpiar
         WRIST_MULTIPLIER: 1.5, // Menor área alrededor de la muñeca
         VISIBILITY_THRESHOLD: 0.5,
         FIRST_CONTACT_FRAMES: 3,
         TRAIL_STEPS: 6,
-        CLEAN_THRESHOLD: 0.75 // 75% para considerar limpio y demorar más el salto
+        CLEAN_THRESHOLD: 0.90 // Aumentado a 90% para que devore más tiempo interactuando
     },
     
     // Estado
@@ -29,6 +29,7 @@ const DustSystem = {
     cleanPercentage: 0,
     renderFrameCount: 0,
     playedInicioAudio: false,
+    playedHistoriaAudio: false,
     wristState: {
         left: { prev: null, visible: false, firstContact: 0 },
         right: { prev: null, visible: false, firstContact: 0 }
@@ -271,6 +272,12 @@ const DustSystem = {
             this.playedInicioAudio = true;
         }
 
+        if (this.cleanPercentage > 0.35 && !this.playedHistoriaAudio) {
+            const audioHistoria = document.getElementById('audio-historia');
+            if (audioHistoria) audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
+            this.playedHistoriaAudio = true;
+        }
+
         if (this.cleanPercentage > this.CONFIG.CLEAN_THRESHOLD) {
             this.isFinished = true;
             if (this.onCleaned) this.onCleaned();
@@ -283,6 +290,7 @@ const DustSystem = {
         this.isFinished = false;
         this.cleanPercentage = 0;
         this.playedInicioAudio = false;
+        this.playedHistoriaAudio = false;
         this.maskCtx.fillStyle = 'black';
         this.maskCtx.fillRect(0, 0, this.CONFIG.MASK_SIZE, this.CONFIG.MASK_SIZE);
         
