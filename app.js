@@ -1292,41 +1292,41 @@ async function cambiarTraje(direccion) {
         showGestureIndicator('👈');
     }
 
-    // Audio Navegacion
-    const audioNav = document.getElementById('audio-navegacion');
-    if (audioNav) {
-        audioNav.currentTime = 0;
-        audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
+    // Solo reproducir audios la primera vez que se cambia de traje
+    if (!State.haCambiadoTraje) {
+        const audioNav = document.getElementById('audio-navegacion');
+        const audioGlobo = document.getElementById('audio-globo');
+        if (audioNav) {
+            audioNav.currentTime = 0;
+            audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
+            
+            // Inmediatamente al terminar derecha.wav, suena globo.wav
+            audioNav.onended = () => {
+                if (audioGlobo) {
+                    audioGlobo.currentTime = 0;
+                    audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
+                }
+            };
+        }
+        State.haCambiadoTraje = true;
     }
     
-    // Logica audios globo y fotoss despues de 3 cambios
+    // Logica audios foto despues de 3 cambios de traje (ya que globo se reprodujo al inicio)
     State.contadorCambiosTraje = (State.contadorCambiosTraje || 0) + 1;
-    if (State.contadorCambiosTraje > 3 && !State.reprodujoGloboFotos) {
-        State.reprodujoGloboFotos = true;
-        const audioGlobo = document.getElementById('audio-globo');
+    if (State.contadorCambiosTraje > 3 && !State.reprodujoFotos) {
+        State.reprodujoFotos = true;
         const audioFotoss = document.getElementById('audio-fotoss');
         const audioFinal = document.getElementById('audio-final'); // Invitacion
         
-        if (audioNav) {
-            audioNav.onended = () => {
-                setTimeout(() => {
-                    if (audioGlobo) {
-                        audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
-                        audioGlobo.onended = () => {
-                            setTimeout(() => {
-                                if (audioFotoss) audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
-                                if (audioFotoss && audioFinal) {
-                                    audioFotoss.onended = () => {
-                                        setTimeout(() => {
-                                            audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
-                                        }, 1000);
-                                    }
-                                }
-                            }, 1000);
-                        };
-                    }
-                }, 1000); // 1 segundo después de derecha.wav
-            };
+        if (audioFotoss) {
+            audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
+            if (audioFinal) {
+                audioFotoss.onended = () => {
+                    setTimeout(() => {
+                        audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
+                    }, 1000);
+                }
+            }
         }
     }
 
