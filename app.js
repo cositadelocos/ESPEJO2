@@ -776,14 +776,8 @@ function onPersonaDetectada(detectada) {
             hideElement('#tarjetas-categorias');
         }
 
-        // Iniciar cuenta regresiva para reiniciar la experiencia si nadie aparece por 7 segundos.
-        // Evitamos reiniciar si ya estamos en fase limpiar.
-        if (State.faseActual !== 'limpiar') {
-            State.idleTimeout = setTimeout(() => {
-                console.log("Nadie detectado por 7 segundos. Reiniciando experiencia al polvo...");
-                resetearExperiencia();
-            }, 7000);
-        }
+        // El reinicio por timeout de 7 segundos fue removido.
+        // Solo se reinicia con el gesto de despedida.
     }
 }
 
