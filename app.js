@@ -1305,12 +1305,31 @@ async function cambiarTraje(direccion) {
     if (!State.haCambiadoTraje) {
         const audioNav = document.getElementById('audio-navegacion');
         const audioGlobo = document.getElementById('audio-globo');
+        const audioTela = document.getElementById('audio-tela');
+        const audioFotoss = document.getElementById('audio-fotoss');
+        
         if (audioNav) {
             audioNav.currentTime = 0;
             // Configurar el evento antes de arrancar
             audioNav.onended = () => {
                 setTimeout(() => {
                     if (audioGlobo) {
+                        audioGlobo.onended = () => {
+                            setTimeout(() => {
+                                if (audioTela) {
+                                    audioTela.onended = () => {
+                                        setTimeout(() => {
+                                            if (audioFotoss) {
+                                                audioFotoss.currentTime = 0;
+                                                audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
+                                            }
+                                        }, 1000); // 1 segundo despues de tela
+                                    };
+                                    audioTela.currentTime = 0;
+                                    audioTela.play().catch(e => console.log('Audio tela bloqueado', e));
+                                }
+                            }, 1000); // 1 segundo despues de globo
+                        };
                         audioGlobo.currentTime = 0;
                         audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
                     }
@@ -1319,36 +1338,6 @@ async function cambiarTraje(direccion) {
             audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
         }
         State.haCambiadoTraje = true;
-    }
-    
-    // Logica audios foto despues de 3 cambios de traje (ya que globo se reprodujo al inicio)
-    State.contadorCambiosTraje = (State.contadorCambiosTraje || 0) + 1;
-    if (State.contadorCambiosTraje > 3 && !State.reprodujoFotos) {
-        State.reprodujoFotos = true;
-        const audioFotoss = document.getElementById('audio-fotoss');
-        const audioFinal = document.getElementById('audio-final'); // Invitacion
-        const audioDespedida = document.getElementById('audio-despedida'); // Despedida
-        
-        if (audioFotoss) {
-            audioFotoss.onended = () => {
-                setTimeout(() => {
-                    if (audioFinal) {
-                        audioFinal.onended = () => {
-                            setTimeout(() => {
-                                if (audioDespedida) {
-                                    audioDespedida.currentTime = 0;
-                                    audioDespedida.play().catch(e => console.log('Audio despedida bloqueado', e));
-                                }
-                            }, 1000); // 1 segundo despues de invitiacion
-                        };
-                        audioFinal.currentTime = 0;
-                        audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
-                    }
-                }, 1000);
-            };
-            audioFotoss.currentTime = 0;
-            audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
-        }
     }
 
     console.log(`🔄 Cambiando a traje ${State.trajeActual + 1}`);
@@ -1411,6 +1400,23 @@ async function tomarFotoRecuerdo() {
     showGestureIndicator('📸');
 
     console.log('📸 Tomando foto de recuerdo');
+    
+    // Reproducir audios de foto
+    const audioFinal = document.getElementById('audio-final'); // Invitacion
+    const audioDespedida = document.getElementById('audio-despedida'); // Despedida
+    
+    if (audioFinal) {
+        audioFinal.onended = () => {
+            setTimeout(() => {
+                if (audioDespedida) {
+                    audioDespedida.currentTime = 0;
+                    audioDespedida.play().catch(e => console.log('Audio despedida bloqueado', e));
+                }
+            }, 1000); // 1 segundo despues de invitacion
+        };
+        audioFinal.currentTime = 0;
+        audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
+    }
 
     // Crear canvas de recuerdo
     const canvasOriginal = $('#traje-canvas');
