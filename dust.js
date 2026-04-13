@@ -154,23 +154,24 @@ const DustSystem = {
         return PIXI.Texture.from(canvas);
     },
     
-    // Procesa las muñecas de MediaPipe
+    // Procesa los puntos de MediaPipe (Centro en la punta de la mano/dedos)
     processLandmarks: function(landmarks) {
         if (this.isFinished || !this.app) return;
         
-        // 15: JOINTS.LEFT_WRIST, 17: LEFT_PINKY
+        // Puntos de la mano izquierda
         const leftWrist = landmarks[15];
-        const leftPinky = landmarks[17];
-        this.processWrist(leftWrist, leftPinky, 'left');
+        const leftIndex = landmarks[19]; // Punta índice izquierdo
+        // Usar índice para limpiar, pero wrist para calcular radio (distancia)
+        this.processHand(leftIndex || leftWrist, leftWrist, 'left');
         
-        // 16: JOINTS.RIGHT_WRIST, 18: RIGHT_PINKY
+        // Puntos de la mano derecha
         const rightWrist = landmarks[16];
-        const rightPinky = landmarks[18];
-        this.processWrist(rightWrist, rightPinky, 'right');
+        const rightIndex = landmarks[20]; // Punta índice derecho
+        this.processHand(rightIndex || rightWrist, rightWrist, 'right');
     },
     
-    processWrist: function(wrist, pinky, side) {
-        if (!wrist || !pinky || wrist.visibility < this.CONFIG.VISIBILITY_THRESHOLD) {
+    processHand: function(handCenter, wrist, side) {
+        if (!handCenter || !wrist || handCenter.visibility < this.CONFIG.VISIBILITY_THRESHOLD) {
             this.wristState[side].visible = false;
             this.wristState[side].firstContact = 0;
             return;
@@ -181,8 +182,9 @@ const DustSystem = {
         }
         this.wristState[side].visible = true;
 
-        const dx = wrist.x - pinky.x;
-        const dy = wrist.y - pinky.y;
+        // Calcular radio con base en la distancia del centro al wrist (para tener una referencia de tamaño)
+        const dx = handCenter.x - wrist.x;
+        const dy = handCenter.y - wrist.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         let radiusUV = distance * this.CONFIG.WRIST_MULTIPLIER;
 
@@ -193,9 +195,9 @@ const DustSystem = {
             this.wristState[side].firstContact--;
         }
 
-        // Espejado
-        const wristX = (1.0 - wrist.x) * this.CONFIG.MASK_SIZE; 
-        const wristY = wrist.y * this.CONFIG.MASK_SIZE;
+        // Espejado usando el centro de la mano (índice)
+        const wristX = (1.0 - handCenter.x) * this.CONFIG.MASK_SIZE; 
+        const wristY = handCenter.y * this.CONFIG.MASK_SIZE;
         const radiusPx = radiusUV * this.CONFIG.MASK_SIZE;
 
         const prev = this.wristState[side].prev;
@@ -266,17 +268,21 @@ const DustSystem = {
 
         this.cleanPercentage = cleanPixels / totalSamples;
         
-        if (this.cleanPercentage > 0.11 && !this.playedInicioAudio) {
+        if (this.cleanPercentage > 0.09 && !this.playedInicioAudio) {
+            this.playedInicioAudio = true; // Set block flag first
             const audioInicio = document.getElementById('audio-inicio');
             if (audioInicio) {
-                audioInicio.play().catch(e => console.log('Audio inicio bloqueado o no encontrado', e));
+                // Forzamos currentTime a 0 por si a caso
+                audioInicio.currentTime = 0;
+                let playPromise = audioInicio.play();
                 
-                // Para evitar que se choquen, esperamos a que termine inicio.wav y 1s despues reproducir historia.wav
-                audioInicio.onended = () => {
+                // Función auxiliar para continuar con "historia"
+                const continuarConHistoria = () => {
                     setTimeout(() => {
                         const audioHistoria = document.getElementById('audio-historia');
                         if (audioHistoria && !this.playedHistoriaAudio) {
                             this.playedHistoriaAudio = true;
+                            audioHistoria.currentTime = 0;
                             audioHistoria.play().catch(e => console.log('Audio historia bloqueado', e));
                             
                             // Una vez termine "historia.wav", 1 segundo despues el espejo se limpia automático
@@ -287,11 +293,26 @@ const DustSystem = {
                                     }
                                 }, 1000);
                             };
+                            
+                            // Respaldo por si onended falla o no dispara (asumiendo que historia no supera los ~30 seg, pero lo mejor es el listener puro)
                         }
-                    }, 1000);
+                    }, 1000); // <-- 1 segundo de pausa entre audios
                 };
+
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        // Reproduciendo correctamente
+                        audioInicio.onended = continuarConHistoria;
+                    }).catch(e => {
+                        console.log('Audio inicio bloqueado o error', e);
+                        // Si falla, pasamos directo a intentar historia como fallback
+                        continuarConHistoria();
+                    });
+                } else {
+                    // Navegadores viejos donde play() no devuelve promise
+                    audioInicio.onended = continuarConHistoria;
+                }
             }
-            this.playedInicioAudio = true;
         }
 
         if (this.cleanPercentage > this.CONFIG.CLEAN_THRESHOLD) {
