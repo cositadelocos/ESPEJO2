@@ -1833,13 +1833,18 @@ function unlockAudios() {
     if (State.audiosUnlocked) return;
     console.log('🔓 Desbloqueando audios por primera interacción...');
     
-    // Lista de IDs de tus audios
-    const audios = ['audio-inicio', 'audio-mueve', 'audio-navegacion', 'audio-final'];
+    // Lista completa de IDs de tus audios
+    const audios = [
+        'audio-inicio', 'audio-mueve', 'audio-navegacion', 
+        'audio-final', 'audio-historia', 'audio-globo', 
+        'audio-tela', 'audio-fotoss', 'audio-despedida'
+    ];
     
     audios.forEach(id => {
         const audio = document.getElementById(id);
         if (audio) {
-            // Reproducir y pausar inmediatamente con volumen 0 para desbloquear
+            // Cargar y reproducir silenciado para desbloquear en iOS/Safari
+            audio.load();
             const originalVolume = audio.volume;
             audio.volume = 0;
             const playPromise = audio.play();
