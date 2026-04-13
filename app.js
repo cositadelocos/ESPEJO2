@@ -1298,15 +1298,16 @@ async function cambiarTraje(direccion) {
         const audioGlobo = document.getElementById('audio-globo');
         if (audioNav) {
             audioNav.currentTime = 0;
-            audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
-            
-            // Inmediatamente al terminar derecha.wav, suena globo.wav
+            // Configurar el evento antes de arrancar
             audioNav.onended = () => {
-                if (audioGlobo) {
-                    audioGlobo.currentTime = 0;
-                    audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
-                }
+                setTimeout(() => {
+                    if (audioGlobo) {
+                        audioGlobo.currentTime = 0;
+                        audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
+                    }
+                }, 1000); // 1 segundo despues de audio-navegacion
             };
+            audioNav.play().catch(e => console.log('Audio bloqueado: ', e));
         }
         State.haCambiadoTraje = true;
     }
@@ -1317,16 +1318,27 @@ async function cambiarTraje(direccion) {
         State.reprodujoFotos = true;
         const audioFotoss = document.getElementById('audio-fotoss');
         const audioFinal = document.getElementById('audio-final'); // Invitacion
+        const audioDespedida = document.getElementById('audio-despedida'); // Despedida
         
         if (audioFotoss) {
-            audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
-            if (audioFinal) {
-                audioFotoss.onended = () => {
-                    setTimeout(() => {
+            audioFotoss.onended = () => {
+                setTimeout(() => {
+                    if (audioFinal) {
+                        audioFinal.onended = () => {
+                            setTimeout(() => {
+                                if (audioDespedida) {
+                                    audioDespedida.currentTime = 0;
+                                    audioDespedida.play().catch(e => console.log('Audio despedida bloqueado', e));
+                                }
+                            }, 1000); // 1 segundo despues de invitiacion
+                        };
+                        audioFinal.currentTime = 0;
                         audioFinal.play().catch(e => console.log('Audio invitación bloqueado', e));
-                    }, 1000);
-                }
-            }
+                    }
+                }, 1000);
+            };
+            audioFotoss.currentTime = 0;
+            audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
         }
     }
 
@@ -1390,10 +1402,6 @@ async function tomarFotoRecuerdo() {
     showGestureIndicator('📸');
 
     console.log('📸 Tomando foto de recuerdo');
-    
-    // Reproducir audio final al tomar la pose de la foto
-    const audioFinal = document.getElementById('audio-final');
-    if (audioFinal) audioFinal.play().catch(e => console.log('Audio bloqueado: ', e));
 
     // Crear canvas de recuerdo
     const canvasOriginal = $('#traje-canvas');
