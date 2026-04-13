@@ -15,13 +15,13 @@ const DustSystem = {
     CONFIG: {
         MASK_SIZE: 512,
         DUST_FADE_RATE: 0.0008,
-        MIN_BRUSH_RADIUS: 0.02, // Reducido aún más para que cueste más limpiar
-        MAX_BRUSH_RADIUS: 0.05, // Reducido aún más para que cueste más limpiar
+        MIN_BRUSH_RADIUS: 0.035, // Aumentado ligeramente para mejor limpieza
+        MAX_BRUSH_RADIUS: 0.07, // Aumentado ligeramente para mejor limpieza
         WRIST_MULTIPLIER: 1.5, // Menor área alrededor de la muñeca
         VISIBILITY_THRESHOLD: 0.5,
         FIRST_CONTACT_FRAMES: 3,
         TRAIL_STEPS: 6,
-        CLEAN_THRESHOLD: 0.90 // Aumentado a 90% para que devore más tiempo interactuando
+        CLEAN_THRESHOLD: 0.80 // Reducido a 80%
     },
     
     // Estado
@@ -266,7 +266,7 @@ const DustSystem = {
 
         this.cleanPercentage = cleanPixels / totalSamples;
         
-        if (this.cleanPercentage > 0.10 && !this.playedInicioAudio) {
+        if (this.cleanPercentage > 0.11 && !this.playedInicioAudio) {
             const audioInicio = document.getElementById('audio-inicio');
             if (audioInicio) audioInicio.play().catch(e => console.log('Audio inicio bloqueado o no encontrado', e));
             this.playedInicioAudio = true;

@@ -1301,6 +1301,23 @@ async function cambiarTraje(direccion) {
         State.haCambiadoTraje = true;
     }
 
+    // Logica audios globo y fotoss despues de 3 cambios
+    State.contadorCambiosTraje = (State.contadorCambiosTraje || 0) + 1;
+    if (State.contadorCambiosTraje > 3 && !State.reprodujoGloboFotos) {
+        State.reprodujoGloboFotos = true;
+        const audioGlobo = document.getElementById('audio-globo');
+        const audioFotoss = document.getElementById('audio-fotoss');
+        
+        if (audioGlobo && audioFotoss) {
+            audioGlobo.play().catch(e => console.log('Audio globo bloqueado', e));
+            audioGlobo.onended = () => {
+                setTimeout(() => {
+                    audioFotoss.play().catch(e => console.log('Audio fotoss bloqueado', e));
+                }, 1000); // Esperar 1 segundo tras finalizar globo
+            };
+        }
+    }
+
     console.log(`🔄 Cambiando a traje ${State.trajeActual + 1}`);
 
     // Regenerar fotomontaje con nueva imagen
